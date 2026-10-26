@@ -1,0 +1,115 @@
+---
+title: "Analysing reading and visual world eye-tracking experiments with pymovements"
+format: revealjs
+engine: knitr
+---
+
+```{r setup}
+#| include: false
+library(reticulate)
+library(tidyverse)
+use_python(Sys.getenv("RETICULATE_PYTHON", unset = Sys.which("python3")), required = TRUE)
+```
+
+## Workflow
+
+1. **Python (pymovements)**: load raw gaze samples, convert pixels to degrees, compute velocities, detect fixations and saccades.
+2. **R (tidyverse, lme4)**: merge fixations with interest areas, compute reading measures (FFD, GD, TVT, ...), run statistics.
+
+This mirrors the analysis in [fixated](https://github.com/bernhardangele/fixated), using pymovements for the preprocessing.
+
+## Simulated raw data
+
+```{python}
+import numpy as np
+import polars as pl
+
+rng = np.random.default_rng(1)
+rows = []
+t = 0
+x, y = 100.0, 540.0
+for target in [150, 260, 380, 470, 590, 700, 650, 800, 900]:
+    for _ in range(int(rng.integers(40, 80))):  # fixation, 1000 Hz
+        rows.append((t, target + rng.normal(0, 1), 540 + rng.normal(0, 1)))
+        t += 1
+    for k in range(1, 21):  # saccade
+        rows.append((t, x + (target - x) * k / 20, 540.0))
+        t += 1
+    x = target
+samples = pl.DataFrame(rows, schema=["time", "x_pix", "y_pix"], orient="row")
+samples.head()
+```
+
+## Preprocessing with pymovements
+
+```{python}
+import pymovements as pm
+
+experiment = pm.Experiment(
+    screen_width_px=1920, screen_height_px=1080,
+    screen_width_cm=53, screen_height_cm=30,
+    distance_cm=60, sampling_rate=1000,
+)
+gaze = pm.Gaze(
+    samples=samples, experiment=experiment,
+    time_column="time", time_unit="ms",
+    pixel_columns=["x_pix", "y_pix"],
+)
+gaze.pix2deg()
+gaze.pos2vel("savitzky_golay", degree=2, window_length=7)
+gaze.detect("ivt", velocity_threshold=30)
+gaze.compute_event_properties(["location", "duration"])
+fixations = gaze.events.frame.filter(pl.col("name") == "fixation")
+fixations.head()
+```
+
+## Handing over to R
+
+```{python}
+fix_df = fixations.select(["onset", "offset", "duration", "location"]).with_columns(
+    pl.col("location").list.get(0).alias("x"),
+).drop("location").to_pandas()
+```
+
+```{r}
+fix <- py$fix_df
+head(fix)
+```
+
+## Reading measures in R
+
+```{r}
+# Interest areas (words) on the x axis, in pixels
+words <- tibble(word = 1:5, start = c(100, 300, 450, 650, 850), end = c(300, 450, 650, 850, 1000))
+
+fix <- fix |>
+  mutate(word = map_int(x, \(px) { w <- words$word[px >= words$start & px < words$end]; if (length(w)) w[1] else NA_integer_ })) |>
+  filter(!is.na(word))
+
+measures <- fix |>
+  arrange(onset) |>
+  group_by(word) |>
+  summarise(FFD = first(duration), TVT = sum(duration), n_fix = n(), .groups = "drop")
+measures
+```
+
+## Statistics
+
+```{r}
+#| eval: false
+# With real data (many participants/items) fit mixed models, e.g.:
+# lmerTest::lmer(log(FFD) ~ frequency + (1 | subject) + (1 | item), data = measures)
+```
+
+## Visual world experiments
+
+Load the same way, detect fixations with pymovements, then assign each fixation to an area of interest
+(target, competitor, distractors) in R and aggregate proportions of looks in time bins
+(`count()` by time bin and AOI), followed by growth curve or cluster-based analyses.
+
+## Running the workshop
+
+```bash
+docker compose up --build   # then open http://localhost:8787 (rstudio / workshop)
+quarto render workshop/presentation.qmd
+```

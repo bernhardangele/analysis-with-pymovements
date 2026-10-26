@@ -1,0 +1,9 @@
+services:
+  workshop:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      PASSWORD: workshop
+    volumes:
+      - ./workshop:/home/rstudio/workshop
