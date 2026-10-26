@@ -1,6 +1,8 @@
 ---
 title: "Analysing reading and visual world eye-tracking experiments with pymovements"
-format: revealjs
+format:
+  revealjs:
+    embed-resources: true
 engine: knitr
 ---
 
@@ -8,104 +10,309 @@ engine: knitr
 #| include: false
 library(reticulate)
 library(tidyverse)
+library(fixated)
 use_python(Sys.getenv("RETICULATE_PYTHON", unset = Sys.which("python3")), required = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
 ## Workflow
 
-1. **Python (pymovements)**: load raw gaze samples, convert pixels to degrees, compute velocities, detect fixations and saccades.
-2. **R (tidyverse, lme4)**: merge fixations with interest areas, compute reading measures (FFD, GD, TVT, ...), run statistics.
+1. **Python (pymovements)**: read the raw EyeLink ASC file, convert pixels to degrees, compute velocities, detect fixations.
+2. **R ([fixated](https://github.com/bernhardangele/fixated), tidyverse, lme4)**: merge fixations with word regions, compute reading measures (FFD, GD, GPT, TVT, ...), run statistics.
 
-This mirrors the analysis in [fixated](https://github.com/bernhardangele/fixated), using pymovements for the preprocessing.
+All results are computed from a **real binocular EyeLink recording**
+(`data/sub_1_example.asc`, Spanish sentence reading, 1000 Hz, 4 trials), the example file shipped with `fixated`.
 
-## Simulated raw data
+## Reading the ASC file
 
 ```{python}
 import numpy as np
 import polars as pl
+import pymovements as pm
 
-rng = np.random.default_rng(1)
-rows = []
-t = 0
-x, y = 100.0, 540.0
-for target in [150, 260, 380, 470, 590, 700, 650, 800, 900]:
-    for _ in range(int(rng.integers(40, 80))):  # fixation, 1000 Hz
-        rows.append((t, target + rng.normal(0, 1), 540 + rng.normal(0, 1)))
-        t += 1
-    for k in range(1, 21):  # saccade
-        rows.append((t, x + (target - x) * k / 20, 540.0))
-        t += 1
-    x = target
-samples = pl.DataFrame(rows, schema=["time", "x_pix", "y_pix"], orient="row")
-samples.head()
+gaze_raw = pm.gaze.from_asc("data/sub_1_example.asc", messages=True)
+messages = gaze_raw.messages.with_columns(pl.col("time").cast(pl.Int64))
+gaze_raw.samples.head(3)
+```
+
+Samples are binocular: `pixel` holds `[x_left, y_left, x_right, y_right]`.
+
+## Trials and word boundaries from the messages
+
+```{python}
+trials = (
+    messages.filter(pl.col("content").str.contains(r"^start_trial|^DISPLAY (ON|OFF)"))
+    .with_columns(
+        pl.col("content").str.extract(r"^start_trial (\d+)", 1).cast(pl.Int64).forward_fill().alias("trial")
+    )
+    .filter(pl.col("content").str.starts_with("DISPLAY"))
+    .group_by("trial", maintain_order=True)
+    .agg(
+        pl.col("time").filter(pl.col("content") == "DISPLAY ON").first().alias("display_on"),
+        pl.col("time").filter(pl.col("content") == "DISPLAY OFF").first().alias("display_off"),
+    )
+)
+
+words = (
+    messages.filter(pl.col("content").str.contains(r"^TRIAL \d+ ITEM"))
+    .with_columns(
+        pl.col("content").str.extract_groups(
+            r"^TRIAL (?P<trial>\d+) ITEM (?P<item>\d+) WORD (?P<word_id>\d+) (?P<word>\S+) RIGHT_BOUNDARY (?P<x_end>\d+)"
+        ).alias("d")
+    )
+    .unnest("d")
+    .with_columns(pl.col(c).cast(pl.Int64) for c in ["trial", "item", "word_id", "x_end"])
+    .drop("time", "content")
+    .sort("trial", "word_id")
+    # the left edge of a word is the right boundary of the previous one
+    .with_columns(pl.col("x_end").shift(1).over("trial").fill_null(0).alias("x_start"))
+)
+trials
 ```
 
 ## Preprocessing with pymovements
 
+Only left-eye samples between `DISPLAY ON` and `DISPLAY OFF` are used.
+The screen geometry (53 x 29.8 cm at 60 cm) gives ~40 px/deg, matching the resolution reported by the EyeLink.
+
 ```{python}
-import pymovements as pm
+samples = (
+    gaze_raw.samples
+    .with_columns(pl.col("pixel").list.get(0).alias("x_pix"), pl.col("pixel").list.get(1).alias("y_pix"))
+    .select("time", "x_pix", "y_pix")
+    .join_where(trials, pl.col("time") >= pl.col("display_on"), pl.col("time") <= pl.col("display_off"))
+    .select("time", "trial", "x_pix", "y_pix")
+)
 
 experiment = pm.Experiment(
     screen_width_px=1920, screen_height_px=1080,
-    screen_width_cm=53, screen_height_cm=30,
+    screen_width_cm=53, screen_height_cm=29.8,
     distance_cm=60, sampling_rate=1000,
 )
 gaze = pm.Gaze(
     samples=samples, experiment=experiment,
     time_column="time", time_unit="ms",
-    pixel_columns=["x_pix", "y_pix"],
+    pixel_columns=["x_pix", "y_pix"], trial_columns="trial",
 )
 gaze.pix2deg()
 gaze.pos2vel("savitzky_golay", degree=2, window_length=7)
-gaze.detect("ivt", velocity_threshold=30)
-gaze.compute_event_properties(["location", "duration"])
-fixations = gaze.events.frame.filter(pl.col("name") == "fixation")
-fixations.head()
+gaze.samples.head(3)
+```
+
+## Fixation detection: two algorithms
+
+- **I-DT** (dispersion): a fixation is a window of samples whose spatial spread stays below a threshold (1 deg) for at least 80 ms.
+- **Engbert & Kliegl** (velocity, adaptive): saccades are samples whose 2D velocity exceeds an elliptic threshold
+  of 6 median-based standard deviations *of that trial's own velocity noise*; fixations are what lies between saccades.
+
+```{python}
+def with_location(fix, samples):
+    """Mean pixel position of the samples within each fixation."""
+    mean_pos = (
+        fix.join_where(samples, pl.col("time") >= pl.col("onset"), pl.col("time") <= pl.col("offset"),
+                       suffix="_s")
+        .filter(pl.col("trial") == pl.col("trial_s"))
+        .group_by("trial", "onset", "offset", "duration", maintain_order=True)
+        .agg(pl.col("x_pix").mean().alias("avg_x"), pl.col("y_pix").mean().alias("avg_y"))
+    )
+    return mean_pos.rename({"onset": "start_time", "offset": "end_time"})
+
+# I-DT
+gaze.detect("idt", dispersion_threshold=1.0, minimum_duration=80, name="fixation")
+fix_idt = with_location(
+    gaze.events.frame.filter(pl.col("name") == "fixation").select("trial", "onset", "offset", "duration"),
+    samples,
+)
+
+# Engbert & Kliegl (2003; Engbert & Mergenthaler 2006 threshold): detect saccades per trial, then fill the gaps
+ek = []
+for (trial,), sub in gaze.samples.group_by("trial", maintain_order=True):
+    sacc = pm.events.microsaccades(sub["velocity"], timesteps=sub["time"], minimum_duration=6, threshold_factor=6)
+    fix = pm.events.fill(sacc, timesteps=sub["time"], minimum_duration=40, name="fixation")
+    ek.append(fix.frame.with_columns(pl.lit(trial).cast(pl.Int64).alias("trial")))
+fix_ek = with_location(pl.concat(ek).select("trial", "onset", "offset", "duration"), samples)
+
+fixations = fix_ek  # used for the reading measures below
+fix_ek.head(5)
+```
+
+## Comparing the algorithms with EyeLink
+
+```{python}
+el = pm.gaze.from_asc("data/sub_1_example.asc", events=True).events.frame
+fix_el = (
+    el.filter((pl.col("name") == "fixation_eyelink") & (pl.col("eye") == "left"))
+    .join_where(trials, pl.col("onset") >= pl.col("display_on"), pl.col("onset") <= pl.col("display_off"))
+    .select("trial", "duration")
+)
+pl.concat([
+    fix_idt.select("trial", "duration").with_columns(pl.lit("pymovements I-DT").alias("source")),
+    fix_ek.select("trial", "duration").with_columns(pl.lit("pymovements Engbert & Kliegl").alias("source")),
+    fix_el.with_columns(pl.lit("EyeLink (left eye)").alias("source")),
+]).group_by("source").agg(
+    pl.len().alias("n"), pl.col("duration").mean().round(1).alias("mean_ms"), pl.col("duration").median().alias("median_ms")
+).sort("source")
+```
+
+## Why do they differ?
+
+- The EyeLink parser is also velocity/acceleration based (30 deg/s, 8000 deg/s^2 defaults) with *fixed* thresholds, so it
+  behaves like Engbert & Kliegl; the adaptive EK threshold adjusts to noise in each trial.
+- I-DT ignores velocity: slow drifts or glissades after a saccade stay inside the dispersion window and are merged
+  into the fixation, while small saccades between nearby fixations can be missed. Its minimum duration (80 ms) also removes many short fixations.
+- Differences in fixation counts and durations propagate into word-level measures (see below).
+
+## Scanpath of trial 0 (shifted by 25 px for visibility)
+
+```{python}
+import matplotlib.pyplot as plt
+
+t0 = fixations.filter(pl.col("trial") == 0)
+w0 = words.filter(pl.col("trial") == 0)
+fig, ax = plt.subplots(figsize=(10, 3))
+for row in w0.iter_rows(named=True):
+    ax.axvspan(row["x_start"], row["x_end"], alpha=0.15 if row["word_id"] % 2 else 0.05, color="k")
+    ax.text((row["x_start"] + row["x_end"]) / 2, 1040, row["word"], ha="center", fontsize=8)
+ax.plot(t0["avg_x"], t0["avg_y"], "-o", color="C0", label="Engbert & Kliegl")
+i0 = fix_idt.filter(pl.col("trial") == 0)
+ax.plot(i0["avg_x"], i0["avg_y"] + 25, "--s", color="C1", alpha=0.7, label="I-DT")
+ax.legend(loc="lower right")
+ax.set_xlim(0, 1100); ax.set_ylim(1080, 500); ax.set_xlabel("x (px)"); ax.set_ylabel("y (px)")
+plt.show()
 ```
 
 ## Handing over to R
 
-```{python}
-fix_df = fixations.select(["onset", "offset", "duration", "location"]).with_columns(
-    pl.col("location").list.get(0).alias("x"),
-).drop("location").to_pandas()
-```
-
 ```{r}
-fix <- py$fix_df
+fix <- py$fixations |> as_tibble() |> mutate(eye = "L", trial = as.integer(trial))
+roi <- py$words |> as_tibble() |>
+  mutate(across(c(trial, item, word_id, x_start, x_end), as.integer), y_start = 0L, y_end = 1080L) |>
+  select(trial, item, word_id, word, x_start, x_end, y_start, y_end)
 head(fix)
 ```
 
-## Reading measures in R
+## Reading measures with fixated
 
 ```{r}
-# Interest areas (words) on the x axis, in pixels
-words <- tibble(word = 1:5, start = c(100, 300, 450, 650, 850), end = c(300, 450, 650, 850, 1000))
-
-fix <- fix |>
-  mutate(word = map_int(x, \(px) { w <- words$word[px >= words$start & px < words$end]; if (length(w)) w[1] else NA_integer_ })) |>
-  filter(!is.na(word))
-
-measures <- fix |>
-  arrange(onset) |>
-  group_by(word) |>
-  summarise(FFD = first(duration), TVT = sum(duration), n_fix = n(), .groups = "drop")
-measures
+measures <- compute_eye_measures(
+  fixations = fix, roi = roi,
+  trial_col = "trial", eye_col = "eye",
+  shorttime = 80
+)
+measures |> select(trial, word_id, word, ffd, gd, gpt, tvt, nfix, oreg, ireg) |> head(12)
 ```
 
-## Statistics
+## Do the algorithms change the reading measures?
 
 ```{r}
-#| eval: false
-# With real data (many participants/items) fit mixed models, e.g.:
-# lmerTest::lmer(log(FFD) ~ frequency + (1 | subject) + (1 | item), data = measures)
+fix_idt <- py$fix_idt |> as_tibble() |> mutate(eye = "L", trial = as.integer(trial))
+m_idt <- compute_eye_measures(fix_idt, roi, trial_col = "trial", eye_col = "eye", shorttime = 80)
+
+bind_rows(`Engbert & Kliegl` = measures, `I-DT` = m_idt, .id = "algorithm") |>
+  group_by(algorithm) |>
+  summarise(across(c(ffd, gd, tvt), \(x) round(mean(x, na.rm = TRUE), 1)), p_fixated = round(mean(pfix), 2))
 ```
 
-## Visual world experiments
+## Word-level summary
 
-Load the same way, detect fixations with pymovements, then assign each fixation to an area of interest
-(target, competitor, distractors) in R and aggregate proportions of looks in time bins
-(`count()` by time bin and AOI), followed by growth curve or cluster-based analyses.
+```{r}
+measures |>
+  summarise(
+    p_fixated = mean(pfix),
+    across(c(ffd, gd, gpt, tvt), \(x) mean(x, na.rm = TRUE)),
+    p_regression_out = mean(oreg, na.rm = TRUE)
+  ) |>
+  mutate(across(where(is.numeric), \(x) round(x, 2)))
+```
+
+## Statistics: word length and gaze duration
+
+Only four sentences are available, so the model demonstrates the workflow rather than testing a hypothesis.
+
+```{r}
+library(lmerTest)
+d <- measures |>
+  mutate(word_length = str_length(str_remove_all(word, "[[:punct:]]"))) |>
+  filter(!is.na(gd), gd > 0) |>
+  mutate(word_length_c = word_length - mean(word_length))
+
+m <- lmer(log(gd) ~ word_length_c + (1 | trial), data = d)
+round(summary(m)$coefficients, 3)
+```
+
+```{r}
+ggplot(d, aes(word_length, gd)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) +
+  labs(x = "Word length (letters)", y = "Gaze duration (ms)")
+```
+
+## Word frequency effect
+
+Frequencies are Zipf values from **SUBTLEX-ESP** (Cuetos et al., 2011; Spanish subtitles), the Spanish counterpart of SUBTLEX-US.
+The ASC file lost the accents (`Ser?`, `cr?ticas`); these are resolved to the most frequent accented form that fits.
+
+```{r}
+subtlex <- read_tsv(Sys.getenv("SUBTLEX_ESP", "data/SUBTLEX-ESP_form_zipf.txt"),
+                    col_names = c("form", "zipf"), col_types = "cd", progress = FALSE)
+
+lookup_zipf <- function(w) {
+  w <- str_to_lower(str_remove_all(w, "[[:punct:]]"))
+  exact <- subtlex$zipf[match(w, subtlex$form)]
+  if (!str_detect(w, fixed("?")) || !is.na(exact)) return(exact)
+  # "?" replaced the accented letter: take the most frequent form with a non-ASCII letter at that position
+  cand <- subtlex |> filter(str_detect(form, paste0("^", str_replace_all(w, fixed("?"), "[^a-z]"), "$")))
+  if (nrow(cand)) max(cand$zipf) else NA_real_
+}
+
+freq <- measures |>
+  mutate(zipf = map_dbl(word, lookup_zipf), word_length = str_length(str_remove_all(word, "[[:punct:]]")))
+cat(sum(!is.na(freq$zipf)), "of", nrow(freq), "words found in SUBTLEX-ESP\n")
+freq |> filter(trial == 0) |> select(word, zipf, ffd, gd, tvt) |> head(10)
+```
+
+## Frequency effect on gaze duration
+
+```{r}
+dz <- freq |>
+  filter(!is.na(gd), gd > 0, !is.na(zipf)) |>
+  mutate(zipf_c = zipf - mean(zipf), word_length_c = word_length - mean(word_length))
+
+m_freq <- lmer(log(gd) ~ zipf_c + word_length_c + (1 | trial), data = dz)
+round(summary(m_freq)$coefficients, 3)
+```
+
+```{r}
+ggplot(dz, aes(zipf, gd)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) +
+  labs(x = "Word frequency (Zipf, SUBTLEX-ESP)", y = "Gaze duration (ms)")
+```
+
+A negative `zipf_c` coefficient means that more frequent words are read faster. With four sentences (one participant) this is only a demonstration.
+
+## Time-course (visual-world style) analysis
+
+`fixated` ships no visual world recording, so the same real data demonstrates the time-course workflow:
+for every 100 ms bin after display onset, which area of interest (here: word) is fixated, and the proportion of
+trials looking at each word. In a visual world study the AOIs would be target, competitor and distractors.
+
+```{r}
+onsets <- py$trials |> as_tibble() |> transmute(trial = as.integer(trial), display_on = as.numeric(display_on))
+bins <- crossing(trial = onsets$trial, bin = seq(0, 1800, by = 100)) |>
+  left_join(onsets, by = "trial") |>
+  mutate(t = display_on + bin)
+
+looks <- bins |>
+  inner_join(fix, by = "trial", relationship = "many-to-many") |>
+  filter(t >= start_time, t <= end_time) |>
+  inner_join(roi, by = "trial", relationship = "many-to-many") |>
+  filter(avg_x >= x_start, avg_x < x_end) |>
+  count(bin, word_id)
+
+props <- looks |> mutate(prop = n / n_distinct(bins$trial))
+ggplot(props, aes(bin, prop, colour = factor(word_id))) +
+  geom_line() + geom_point() +
+  labs(x = "Time since display onset (ms)", y = "Proportion of trials fixating", colour = "Word")
+```
 
 ## Running the workshop
 
