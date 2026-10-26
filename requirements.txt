@@ -1,4 +1,5 @@
 pymovements
 polars
 pandas
+pyarrow
 matplotlib

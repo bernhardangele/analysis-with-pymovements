@@ -13,7 +13,14 @@ ENV RETICULATE_PYTHON=/opt/venv/bin/python
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt jupyter pyyaml
 
-RUN R -q -e 'install.packages(c("reticulate","tidyverse","lme4","lmerTest","emmeans","knitr","rmarkdown"), repos="https://cloud.r-project.org")'
+COPY install_r_packages.R /tmp/install_r_packages.R
+RUN Rscript /tmp/install_r_packages.R
+
+# SUBTLEX-ESP (Cuetos et al., 2011; CC BY-NC) Zipf values; kept outside /home/rstudio/workshop so the
+# docker-compose bind mount does not hide it. The original is at https://osf.io/xp6sz
+RUN mkdir -p /opt/data && curl -fsSL -o /opt/data/SUBTLEX-ESP_form_zipf.txt \
+    https://raw.githubusercontent.com/LaSTUS-TALN-UPF/TSAR-LSBert/25ac18b5748b41741e65d009e5cce5820dfc83ae/code/resources/es/SUBTLEX-ESP/SUBTLEX-ESP_form_zipf.txt
+ENV SUBTLEX_ESP=/opt/data/SUBTLEX-ESP_form_zipf.txt
 
 WORKDIR /home/rstudio/workshop
 COPY workshop/ /home/rstudio/workshop/
