@@ -1,0 +1,37 @@
+{
+  "name": "pymovementsAnalysis",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/rstudio/project,type=bind",
+  "workspaceFolder": "/home/rstudio/project",
+
+  "forwardPorts": [8787],
+
+  "containerEnv": {
+    "CMDSTAN": "/opt/cmdstan/cmdstan-2.40.0",
+    "PASSWORD": "workshop",
+    "RETICULATE_PYTHON": "/opt/venv/bin/python"
+  },
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/venv/bin/python",
+        "r.rterm.linux": "/usr/local/bin/R",
+        "r.bracketedPaste": true,
+        "r.plot.view": "Two"
+      },
+      "extensions": [
+        "REditorSupport.r",
+        "ms-python.python",
+        "ms-toolsai.jupyter",
+        "tamasfe.even-better-toml",
+        "quarto.quarto"
+      ]
+    }
+  },
+
+  "remoteUser": "root"
+}
