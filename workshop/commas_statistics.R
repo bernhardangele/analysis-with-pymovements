@@ -1,5 +1,5 @@
 # Tables and statistics for the frases-comas experiment (workshop version), compared with the paper.
-# Input: measures.csv (commas_measures.R) and questions.csv (commas_preprocessing.py). Run from workshop/:
+# Input: measures.csv and questions.csv (written by commas_preprocessing.py). Run from workshop/:
 #   Rscript commas_statistics.R
 # The "## ---- name" lines mark the parts that are shown in the slides.
 

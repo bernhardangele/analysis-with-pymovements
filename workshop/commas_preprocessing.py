@@ -4,10 +4,11 @@ For each participant (one ASC file), pymovements
   1. reads samples, the EyeLink fixation/blink events and the messages; a message pattern labels every sample and
      event with the trial it belongs to (TRIALID E1I39D0 = experimental trial, condition 1, item 39),
   2. computes the position of each fixation from its samples,
-  3. assigns each fixation to a region of the sentence (areas of interest).
+  3. assigns each fixation to a region of the sentence (areas of interest),
+  4. after removing short fixations and trials with blinks, computes the reading measures per trial and region.
 
-The script writes four CSV files to data/frases-comas/derived/simple/. Cleaning, reading measures and statistics
-are done in R (commas_measures.R, commas_statistics.R).
+The script writes fixations.csv, measures.csv and questions.csv to data/frases-comas/derived/simple/. The
+statistics are done in R (commas_statistics.R).
 
     cd workshop
     python commas_preprocessing.py      # about 1-2 minutes
@@ -21,6 +22,7 @@ from pathlib import Path
 
 import polars as pl
 import pymovements as pm
+from pymovements.measure.reading import compute_reading_measures
 
 DATA = Path("data") / "frases-comas"
 ASC_DIR = DATA / "edf"
@@ -130,19 +132,61 @@ def reading_fixations(fixations, times):
     )
 
 
+## ---- prep-clean
+def remove_short_fixations(fixations, minimum=80):
+    """Very short fixations (<= 80 ms) are not real reading fixations."""
+    return fixations.filter(pl.col("duration") > minimum)
+
+
+def remove_blink_trials(fixations, blinks, margin=100):
+    """Blinks distort the fixations around them. Find fixations that overlap a blink or are within 100 ms of one,
+    and remove the trials in which this happened on the critical (pre-comma) region."""
+    near_blink = fixations.join_where(
+        blinks.select(blink_onset="onset", blink_offset="offset"),
+        pl.col("onset") <= pl.col("blink_offset") + margin,
+        pl.col("offset") >= pl.col("blink_onset") - margin,
+    )
+    blink_trials = near_blink.filter(pl.col("region") == 2).select("trial_id").unique()
+    return fixations.join(blink_trials, on="trial_id", how="anti")
+
+
+## ---- prep-measures
+def region_measures(fixations, regions):
+    """Reading measures per trial and region with pymovements. pymovements gives 0 for a region that was not
+    fixated (in first pass); we turn these into missing values."""
+    aois = (
+        regions.join(fixations.select("trial_id").unique(), on="trial_id")
+        .with_columns(word=pl.col("region").cast(pl.String))   # a text column is required; the region number will do
+    )
+    measures = compute_reading_measures(
+        fixations.sort("onset"), aois, word_index_column="region", group_columns=["trial_id"],
+    )
+    first_pass = pl.col("FPF") == 1
+    return measures.join(fixations.select("trial_id", "item", "cond").unique(), on="trial_id").select(
+        "trial_id", "item", "cond", region="word_index",
+        ffd=pl.when(first_pass).then("FFD"),       # first fixation duration
+        gd=pl.when(first_pass).then("FPRT"),       # gaze duration = first-pass reading time
+        gpt=pl.when(first_pass).then("RPD_inc"),   # go-past time = regression-path duration
+        tvt=pl.when(pl.col("Fix") == 1).then("TFT"),  # total viewing time
+    ).sort("trial_id", "region")
+
+
 ## ---- prep-participant
 def preprocess(asc_file):
     gaze = load_participant(asc_file)
-    events = gaze.events.frame                     # keep the blinks before selecting the fixations
+    blinks = gaze.events.frame.filter(pl.col("name") == "blink_eyelink")   # before only fixations are kept
     times = trial_times(gaze.messages)
+    regions = read_regions()
+    fixations = remove_short_fixations(reading_fixations(fixations_on_regions(gaze, regions), times))
+    clean = remove_blink_trials(fixations, blinks)
     subject = pl.lit(asc_file.stem).alias("subject")
-    fixations = reading_fixations(fixations_on_regions(gaze, read_regions()), times)
-    blinks = events.filter((pl.col("name") == "blink_eyelink") & (pl.col("trial_type") == "E"))
     questions = times.filter(pl.col("correct_button").is_not_null())
     return dict(
-        fixations=fixations.select(subject, pl.all()),
-        blinks=blinks.select(subject, "trial_id", "onset", "offset"),
+        fixations=clean.select(subject, pl.all()),
+        measures=region_measures(clean, regions).select(subject, pl.all()),
         questions=questions.select(subject, "trial_id", "button", "correct_button").sort("trial_id"),
+        n_trials=fixations["trial_id"].n_unique(),
+        n_excluded=fixations["trial_id"].n_unique() - clean["trial_id"].n_unique(),
     )
 
 
@@ -152,10 +196,10 @@ def main(workers=4):
     with ProcessPoolExecutor(max_workers=workers) as pool:
         results = list(pool.map(preprocess, files))
     OUT.mkdir(parents=True, exist_ok=True)
-    for name in ["fixations", "blinks", "questions"]:
+    for name in ["fixations", "measures", "questions"]:
         pl.concat([r[name] for r in results]).write_csv(OUT / f"{name}.csv")
-    read_regions().write_csv(OUT / "regions.csv")
-    print(f"{len(files)} participants -> {OUT}")
+    print(f"{len(files)} participants -> {OUT}; {sum(r['n_excluded'] for r in results)} of "
+          f"{sum(r['n_trials'] for r in results)} trials excluded because of blinks")
 
 
 if __name__ == "__main__":

@@ -10,20 +10,20 @@ engine: knitr
 #| include: false
 library(reticulate)
 library(tidyverse)
-library(fixated)
 use_python(Sys.getenv("RETICULATE_PYTHON", unset = Sys.which("python3")), required = TRUE)
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 # code of the Part 2 slides comes from the analysis scripts ("## ---- name" sections)
-for (f in c("commas_preprocessing.py", "commas_measures.R", "commas_statistics.R")) knitr::read_chunk(f)
+for (f in c("commas_preprocessing.py", "commas_statistics.R")) knitr::read_chunk(f)
 ```
 
 ## Workflow
 
-1. **Python (pymovements)**: read the raw EyeLink ASC file, convert pixels to degrees, compute velocities, detect fixations.
-2. **R ([fixated](https://github.com/bernhardangele/fixated), tidyverse, lme4)**: merge fixations with word regions, compute reading measures (FFD, GD, GPT, TVT, ...), run statistics.
+1. **Python (pymovements)**: read the raw EyeLink ASC file, convert pixels to degrees, compute velocities, detect
+   fixations, map them to words, compute reading measures (FFD, GD, GPT, TVT, ...).
+2. **R (tidyverse, lme4)**: plots and statistics.
 
 All results are computed from a **real binocular EyeLink recording**
-(`data/sub_1_example.asc`, Spanish sentence reading, 1000 Hz, 4 trials), the example file shipped with `fixated`.
+(`data/sub_1_example.asc`, Spanish sentence reading, 1000 Hz, 4 trials), the example file shipped with the R package `fixated`.
 
 ## Reading the ASC file
 
@@ -183,36 +183,66 @@ ax.set_xlim(0, 1100); ax.set_ylim(1080, 500); ax.set_xlabel("x (px)"); ax.set_yl
 plt.show()
 ```
 
-## Handing over to R
+## Reading measures with pymovements {.smaller}
 
-```{r}
-fix <- py$fixations |> as_tibble() |> mutate(eye = "L", trial = as.integer(trial))
-roi <- py$words |> as_tibble() |>
-  mutate(across(c(trial, item, word_id, x_start, x_end), as.integer), y_start = 0L, y_end = 1080L) |>
-  select(trial, item, word_id, word, x_start, x_end, y_start, y_end)
-head(fix)
+```{python}
+from pymovements.measure.reading import compute_reading_measures
+
+words = words.with_columns(y_start=pl.lit(0), y_end=pl.lit(1080))   # each word spans the whole screen height
+stimulus = pm.stimulus.TextStimulus(
+    words, aoi_column="word_id", trial_column="trial",
+    start_x_column="x_start", end_x_column="x_end", start_y_column="y_start", end_y_column="y_end",
+)
+
+def reading_measures(fix):
+    """Map the fixations (>= 80 ms) to words, then compute the reading measures per trial and word."""
+    events = pm.Events(
+        fix.filter(pl.col("duration") >= 80)
+        .rename({"start_time": "onset", "end_time": "offset", "avg_x": "location_x", "avg_y": "location_y"})
+        .with_columns(name=pl.lit("fixation"))
+        .sort("trial", "onset"),
+        trial_columns="trial",
+    )
+    events.map_to_aois(stimulus, verbose=False)
+    return compute_reading_measures(events.frame, words.select("trial", "word_id", "word"),
+                                    word_index_column="word_id", group_columns=["trial"])
+
+measures = reading_measures(fixations)      # Engbert & Kliegl fixations
+measures_idt = reading_measures(fix_idt)
+measures.select("trial", "word_index", "word", "FFD", "FPRT", "RPD_inc", "TFT", "FPFC", "FPReg").head(6)
 ```
 
-## Reading measures with fixated
+FFD = first fixation duration · FPRT = first-pass reading time (gaze duration) · RPD_inc = regression-path
+duration (go-past time) · TFT = total fixation time · FPFC = first-pass fixation count · FPReg = regression
+out of the word in first pass; [and more](https://pymovements.readthedocs.io).
+
+## Handing over to R
+
+pymovements gives 0 for words that were not read (in first pass); in R these become missing values.
 
 ```{r}
-measures <- compute_eye_measures(
-  fixations = fix, roi = roi,
-  trial_col = "trial", eye_col = "eye",
-  shorttime = 80
-)
-measures |> select(trial, word_id, word, ffd, gd, gpt, tvt, nfix, oreg, ireg) |> head(12)
+from_pymovements <- function(m) {
+  m |> as_tibble() |>
+    transmute(trial = as.integer(trial), word_id = as.integer(word_index), word,
+              ffd = na_if(FFD, 0), gd = na_if(FPRT, 0), gpt = na_if(RPD_inc, 0), tvt = na_if(TFT, 0),
+              first_pass = FPF, regression_out = if_else(FPF == 1, FPReg, NA))
+}
+measures <- from_pymovements(py$measures)
+
+# fixations and words, for the time-course analysis at the end of Part 1
+fix <- py$fixations |> as_tibble() |> mutate(trial = as.integer(trial))
+roi <- py$words |> as_tibble() |> mutate(across(c(trial, word_id, x_start, x_end), as.integer))
+measures |> head(6)
 ```
 
 ## Do the algorithms change the reading measures?
 
 ```{r}
-fix_idt <- py$fix_idt |> as_tibble() |> mutate(eye = "L", trial = as.integer(trial))
-m_idt <- compute_eye_measures(fix_idt, roi, trial_col = "trial", eye_col = "eye", shorttime = 80)
+m_idt <- from_pymovements(py$measures_idt)
 
 bind_rows(`Engbert & Kliegl` = measures, `I-DT` = m_idt, .id = "algorithm") |>
   group_by(algorithm) |>
-  summarise(across(c(ffd, gd, tvt), \(x) round(mean(x, na.rm = TRUE), 1)), p_fixated = round(mean(pfix), 2))
+  summarise(across(c(ffd, gd, tvt), \(x) round(mean(x, na.rm = TRUE), 1)), p_first_pass = round(mean(first_pass), 2))
 ```
 
 ## Word-level summary
@@ -220,9 +250,9 @@ bind_rows(`Engbert & Kliegl` = measures, `I-DT` = m_idt, .id = "algorithm") |>
 ```{r}
 measures |>
   summarise(
-    p_fixated = mean(pfix),
+    p_first_pass = mean(first_pass),
     across(c(ffd, gd, gpt, tvt), \(x) mean(x, na.rm = TRUE)),
-    p_regression_out = mean(oreg, na.rm = TRUE)
+    p_regression_out = mean(regression_out, na.rm = TRUE)
   ) |>
   mutate(across(where(is.numeric), \(x) round(x, 2)))
 ```
@@ -293,7 +323,7 @@ A negative `zipf_c` coefficient means that more frequent words are read faster. 
 
 ## Time-course (visual-world style) analysis
 
-`fixated` ships no visual world recording, so the same real data demonstrates the time-course workflow:
+There is no visual world recording here, so the same real data demonstrates the time-course workflow:
 for every 100 ms bin after display onset, which area of interest (here: word) is fixated, and the proportion of
 trials looking at each word. In a visual world study the AOIs would be target, competitor and distractors.
 
@@ -334,13 +364,12 @@ before and after it?
 
 | | Script | Does |
 |---|---|---|
-| Python | `commas_preprocessing.py` | **pymovements**: read the ASC files, label trials, fixation positions, regions → CSV |
-| R | `commas_measures.R` | **fixated**: remove short fixations and blink trials, reading measures (FFD, GD, go-past, TVT) |
+| Python | `commas_preprocessing.py` | **pymovements**: read the ASC files, label trials, fixation positions, regions, remove short fixations and blink trials, reading measures (FFD, GD, go-past, TVT) → CSV |
 | R | `commas_statistics.R` | means, mixed models (**lme4**), comparison with the paper |
 
 ```bash
 cd workshop
-python commas_preprocessing.py && Rscript commas_measures.R && Rscript commas_statistics.R
+python commas_preprocessing.py && Rscript commas_statistics.R
 ```
 
 The next slides run the same code step by step, first for one participant.
@@ -440,42 +469,39 @@ ax.set_xlim(60, 1300); ax.set_ylim(-0.4, None); ax.set_yticks([]); ax.set_xlabel
 plt.show()
 ```
 
+## Step 6: cleaning {.smaller}
+
+```{python prep-clean}
+```
+
+```{python}
+blinks = load_participant(ASC_DIR / "C1L1.asc").events.frame.filter(pl.col("name") == "blink_eyelink")
+fixations_c1l1 = remove_short_fixations(reading)
+clean = remove_blink_trials(fixations_c1l1, blinks)
+print(fixations_c1l1["trial_id"].n_unique() - clean["trial_id"].n_unique(), "trials of C1L1 excluded because of blinks")
+```
+
+## Step 7: reading measures {.smaller}
+
+```{python prep-measures}
+```
+
+```{python}
+region_measures(clean, regions).filter(pl.col("trial_id") == "E1I39D0")
+```
+
 ## All participants {.smaller}
 
 ```{python prep-participant}
 ```
 
-`main()` runs `preprocess()` for all 30 ASC files (in parallel) and writes `fixations.csv`, `blinks.csv`,
-`questions.csv` and `regions.csv`:
+`main()` runs `preprocess()` for all 30 ASC files (in parallel) and writes `fixations.csv`, `measures.csv` and
+`questions.csv`:
 
 ```{r}
 #| results: hide
-if (!file.exists("data/frases-comas/derived/simple/fixations.csv"))
+if (!file.exists("data/frases-comas/derived/simple/measures.csv"))
   system2(Sys.getenv("RETICULATE_PYTHON", "python3"), "commas_preprocessing.py")
-```
-
-## R: cleaning {.smaller}
-
-```{r measures-read}
-```
-
-```{r measures-short}
-```
-
-```{r measures-blinks}
-```
-
-## R: reading measures with fixated {.smaller}
-
-```{r measures-fixated}
-```
-
-```{r measures-write}
-#| echo: false
-```
-
-```{r}
-measures |> filter(region %in% 2:4) |> head(6)
 ```
 
 ## Statistics: data {.smaller}
@@ -539,7 +565,8 @@ Measures on the critical regions are identical to the original pipeline in about
 ## Summary
 
 - pymovements reads the raw file, labels trials with a message pattern, and maps fixations to areas of interest
-- fixated computes the reading measures, lme4 the statistics; the scripts are short enough to read in full
+- pymovements also computes the reading measures; R (lme4) only does the statistics; the scripts are short
+  enough to read in full
 - Write down every choice (trial window, short fixations, blinks, outliers): they change the numbers, and
   sometimes which effects cross the 95 % line
 

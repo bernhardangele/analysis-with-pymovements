@@ -1,27 +1,19 @@
 # Plan: remaining work
 
 ## Goal
-Show that the workflow of [fixated](https://github.com/bernhardangele/fixated) can be run on top of
-pymovements preprocessing, with real data, in `workshop/presentation.qmd`.
+Teach the analysis of eye-tracking experiments with pymovements wherever possible (reading, events, AOIs,
+reading measures), R (tidyverse, lme4) for plots and statistics. The R package `fixated` is not used: it is
+maintained by one person only, pymovements is actively developed.
 
 ## Still to do
 
-### 1. Visualizations from `fixated` (priority)
-`plot_trial()` and the Shiny viewers (`plot_trials_shiny`, `plot_trials_shiny_fast`, `plot_trials_shiny_linked`)
-are not used yet. They expect the list returned by `fixated::read_asc()` (`samples`, `events`,
-`word_boundaries`, `trial_db`, with a `trial_nr` column).
-- [ ] Build that list from pymovements output (samples, fixations as `events` with `type == "FIXATION"`,
-      `word_boundaries`, `trial_db` with `t_display_on`/`t_display_off`) and call `plot_trial()`
-      for EK and I-DT fixations.
-- [ ] Check which columns `plot_trial()` needs (`eye`, `start_time`, `end_time`, `avg_x`, `avg_y`, `duration`).
-- [ ] Try the Shiny viewers (cannot be rendered in static revealjs; add as a separate script or a note).
-- [ ] Use `show_measures = TRUE` to overlay FFD/GD/TVT.
+### 1. Visualizations
+- [ ] Scanpath / trial plots with pymovements plotting functions instead of hand-written matplotlib.
+- [ ] Use more of `compute_reading_measures` (skipping, regressions in/out, landing position with character AOIs).
 
-### 2. Other fixated functions with pymovements fixations
-Not tried yet: `clean_fixations`, `merge_fixations`, `mark_fixations_close_to_blinks`, `blink_overlap_or_near`,
-`get_landing_info`, `categorize_fixation`, `assign_word_info`, `process_eyelink_trial`.
-- [ ] Test each on the EK fixations; document what works and what needs adapting.
-- [ ] Detect blinks with `pm.events` (or take them from the ASC) for the blink functions.
+### 2. Removed
+- Visualizations and other functions of `fixated` (`plot_trial`, Shiny viewers, `merge_fixations`, ...): no
+  longer planned.
 
 ### 3. Data and preprocessing
 - [ ] Use both eyes (currently left eye only).
@@ -43,7 +35,7 @@ Not tried yet: `clean_fixations`, `merge_fixations`, `mark_fixations_close_to_bl
       then add proportion-of-looks plots and growth-curve analysis.
 
 ### 6. Environment
-- [ ] CRAN is unreachable in some environments; the image installs `reticulate` and `fixated` from GitHub as a
+- [ ] CRAN is unreachable in some environments; the image installs `reticulate` from GitHub as a
       fallback. Verify a normal build with CRAN access.
 - [ ] SUBTLEX-ESP is downloaded at build time from a GitHub mirror because OSF was not reachable
       (original: https://osf.io/xp6sz). Switch to the official file and check the licence (CC BY-NC).

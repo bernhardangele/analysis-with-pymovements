@@ -6,5 +6,4 @@ if (length(missing)) try(install.packages(missing, repos = "https://cloud.r-proj
 if (!requireNamespace("reticulate", quietly = TRUE)) {
   remotes::install_github("rstudio/reticulate", upgrade = "never")
 }
-remotes::install_github("bernhardangele/fixated", upgrade = "never")
-stopifnot(all(c(need, "fixated") %in% rownames(installed.packages())))
+stopifnot(all(need %in% rownames(installed.packages())))
