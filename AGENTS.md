@@ -18,18 +18,31 @@ Workshop material: analysing reading (and visual-world) eye-tracking data with
 | `requirements.txt` | Python packages (pymovements, polars, pandas, pyarrow, matplotlib) |
 
 ## What has been done
-- Image builds; `quarto render workshop/presentation.qmd` works inside it.
-- Pipeline: `pm.gaze.from_asc` -> trials, display window and word boundaries parsed from ASC messages ->
-  pix2deg / velocity -> fixation detection with I-DT and Engbert & Kliegl (`pm.events.microsaccades` + `pm.events.fill`),
-  compared with EyeLink's own fixations -> hand-over to R via `py$` -> `fixated::compute_eye_measures`.
-- Analyses: reading measures per algorithm, word length and word frequency (SUBTLEX-ESP Zipf) mixed models, time-course plot.
+- `quarto render workshop/presentation.qmd` works inside the container.
+- Part 1 (one recording, `data/sub_1_example.asc`): `pm.gaze.from_asc` -> trials, display window and word boundaries
+  parsed from ASC messages -> pix2deg / velocity -> fixation detection with I-DT and Engbert & Kliegl
+  (`pm.events.microsaccades` + `pm.events.fill`), compared with EyeLink's own fixations -> hand-over to R via `py$` ->
+  `fixated::compute_eye_measures`; word length / frequency (SUBTLEX-ESP Zipf) mixed models, time-course plot.
+- Part 2 (frases-comas, 30 participants): `commas_preprocessing.py` (pymovements: message pattern, EyeLink events,
+  `compute_event_properties`, `TextStimulus` + `Events.map_to_aois`) -> CSV -> `commas_measures.R` (fixated) ->
+  `commas_statistics.R` (lme4, comparison with the paper).
 - Not done: `fixated` plotting (`plot_trial`, Shiny viewers) and most other `fixated` functions; see `plan.md`.
 
 ## How to work here
-- Build: `docker build -t workshop .` (about 5 min, image ~16 GB).
-- Render check (do not write into the bind mount unintentionally):
-  `docker run --rm -v $PWD/workshop:/out workshop bash -c 'cp -r /out /tmp/ws && cd /tmp/ws && quarto render presentation.qmd'`
-- Always verify changes by rendering; chunks run real code.
+You run **inside the workshop container** (devcontainer built from `Dockerfile`); there is no `docker` command.
+- The repository is at `/home/rstudio/project`. `python3` is the venv `/opt/venv/bin/python3` (pymovements etc.
+  installed), `RETICULATE_PYTHON` points to it, `Rscript` and `quarto` are on the PATH, `gcc` is available.
+- The machine is arm64 (`char` is unsigned in C; see `tools/eyedry/run_eyedry.sh`).
+- Python/R packages and SUBTLEX-ESP come from the image. A new dependency must be added to `requirements.txt` /
+  `install_r_packages.R` (and the `Dockerfile`), not only installed in the running container.
+- Always verify changes by rendering; chunks run real code. Render in a copy so no `presentation.html`,
+  `presentation_files/` or `derived/` caches end up in the repository:
+  `rsync -a --delete --exclude '*.EDF' workshop/ /tmp/ws/ && cd /tmp/ws && quarto render presentation.qmd`
+  Add `--exclude derived` to test a render from scratch (Part 2 then runs `commas_preprocessing.py` first).
+- A full render takes several minutes (Part 2 preprocessing alone ~1.5 min without cache): run it in the background
+  and wait for it instead of hitting command timeouts.
+- To stop a hung render, kill the R/quarto processes by PID; `pkill -f '<pattern>'` also matches (and kills) the
+  shell that runs it.
 - No network to CRAN may be available; GitHub is reachable. OSF is not reachable from some sandboxes.
 
 ## Gotchas
@@ -44,7 +57,8 @@ Workshop material: analysing reading (and visual-world) eye-tracking data with
   `/opt/data` is outside `workshop/` because the compose bind mount hides files baked into that folder.
 - Do not commit rendered `presentation.html`.
 - frases-comas: Part 2 of the slides shows the code of the `commas_*` scripts via `knitr::read_chunk` ("## ---- name"
-  sections); keep labels in sync. The slides run `commas_preprocessing.py` if
+  sections); keep labels in sync, and give everything that must not run in the slides (e.g. `main()`, the
+  `if __name__ == "__main__"` block) its own label: under reticulate `__name__` is `"__main__"`. The slides run `commas_preprocessing.py` if
   `workshop/data/frases-comas/derived/simple/fixations.csv` is missing (~1.5 min); delete that folder after changing
   the script. Paths are relative to `workshop/`. pymovements 0.28 drops `EFIX` lines with negative coordinates
   unless the regex is patched (`allow_negative_coordinates()`).
