@@ -9,6 +9,10 @@ Workshop material: analysing reading (and visual-world) eye-tracking data with
 |---|---|
 | `workshop/presentation.qmd` | Quarto revealjs presentation; Python (reticulate) and R chunks in one document, `engine: knitr` |
 | `workshop/data/sub_1_example.asc` | Real binocular EyeLink recording (4 Spanish sentences, 1000 Hz), copied from `fixated/inst/extdata` |
+| `workshop/data/frases-comas/` | Angele et al. comma experiment: 30 ASC files (UMass EyeTrack), original `.da1`/`.IXS`, Tim10drop.pl, manuscript |
+| `tools/replication/frases_comas.py` | Not part of the workshop: exact Python ports of Tim10drop.pl and EyeDry, used to explain the differences to the paper |
+| `workshop/commas_preprocessing.py`, `commas_measures.R`, `commas_statistics.R` | Part 2 of the slides: analysis of frases-comas (pymovements + fixated + lme4); differences to the paper in `commas_README.md` |
+| `sources/eyedry.c`, `tools/eyedry/` | EyeDry source; `run_eyedry.sh` compiles it and reruns the paper's analyses |
 | `Dockerfile`, `docker-compose.yml` | Image based on `bangele1/analysis-in-a-box-rocker` (R, RStudio, Quarto) plus a Python venv at `/opt/venv` |
 | `install_r_packages.R` | Installs missing R packages (CRAN, GitHub fallback) and `fixated` from GitHub |
 | `requirements.txt` | Python packages (pymovements, polars, pandas, pyarrow, matplotlib) |
@@ -39,3 +43,10 @@ Workshop material: analysing reading (and visual-world) eye-tracking data with
 - SUBTLEX-ESP is CC BY-NC: downloaded at build time to `/opt/data` (env `SUBTLEX_ESP`), not committed.
   `/opt/data` is outside `workshop/` because the compose bind mount hides files baked into that folder.
 - Do not commit rendered `presentation.html`.
+- frases-comas: Part 2 of the slides shows the code of the `commas_*` scripts via `knitr::read_chunk` ("## ---- name"
+  sections); keep labels in sync. The slides run `commas_preprocessing.py` if
+  `workshop/data/frases-comas/derived/simple/fixations.csv` is missing (~1.5 min); delete that folder after changing
+  the script. Paths are relative to `workshop/`. pymovements 0.28 drops `EFIX` lines with negative coordinates
+  unless the regex is patched (`allow_negative_coordinates()`).
+- EyeDry reads past the end of `.da1` lines when column 8 exceeds the fixations on the line ("phantom" fixations);
+  the published IXS contain them. `eyedry_read_fixations(overrun=True)` reproduces this.

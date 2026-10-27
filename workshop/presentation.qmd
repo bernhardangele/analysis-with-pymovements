@@ -13,6 +13,8 @@ library(tidyverse)
 library(fixated)
 use_python(Sys.getenv("RETICULATE_PYTHON", unset = Sys.which("python3")), required = TRUE)
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+# code of the Part 2 slides comes from the analysis scripts ("## ---- name" sections)
+for (f in c("commas_preprocessing.py", "commas_measures.R", "commas_statistics.R")) knitr::read_chunk(f)
 ```
 
 ## Workflow
@@ -313,6 +315,233 @@ ggplot(props, aes(bin, prop, colour = factor(word_id))) +
   geom_line() + geom_point() +
   labs(x = "Time since display onset (ms)", y = "Proportion of trials fixating", colour = "Word")
 ```
+
+# Part 2: Analysing a complete experiment {background-color="#2b3e50"}
+
+## Reading(,) with and without commas
+
+Angele, Gutiérrez-Cordero, Perea & Marcet (`data/frases-comas/manuscript-revision-2.pdf`)
+
+- 130 Spanish sentences with mandatory commas, shown **with** (condition 1) or **without** (condition 2) them
+- 30 participants, each sentence once; comprehension questions after 34 sentences
+- EyeLink 1000+, right eye, 1000 Hz; sentences shown with the **UMass EyeTrack** software
+- Regions: 1 sentence start · **2 pre-comma** · **3 post-comma 1** · **4 post-comma 2** · 5 sentence end
+
+*Siempre tiene flores en casa, aun siendo alérgica al polen* — does the comma change how long readers look
+before and after it?
+
+## Workflow
+
+| | Script | Does |
+|---|---|---|
+| Python | `commas_preprocessing.py` | **pymovements**: read the ASC files, label trials, fixation positions, regions → CSV |
+| R | `commas_measures.R` | **fixated**: remove short fixations and blink trials, reading measures (FFD, GD, go-past, TVT) |
+| R | `commas_statistics.R` | means, mixed models (**lme4**), comparison with the paper |
+
+```bash
+cd workshop
+python commas_preprocessing.py && Rscript commas_measures.R && Rscript commas_statistics.R
+```
+
+The next slides run the same code step by step, first for one participant.
+
+```{python prep-setup}
+#| echo: false
+```
+
+## Step 1: read a recording {.smaller}
+
+```{python prep-load}
+```
+
+```{python}
+gaze = load_participant(ASC_DIR / "C1L1.asc")
+gaze.events.frame.group_by("name").len()
+```
+
+::: {.callout-note}
+`load_participant()` first calls `allow_negative_coordinates()`: pymovements 0.28 silently drops EyeLink
+fixations with a negative x (gaze just left of the screen).
+:::
+
+## What EyeTrack writes into the file
+
+```{python}
+msgs = gaze.messages.with_columns(pl.col("time").cast(pl.Int64))
+start = msgs.filter(pl.col("content") == "TRIALID E1I39D0")["time"][0]
+trial39 = msgs.filter(pl.col("time").is_between(start, start + 20000) & ~pl.col("content").str.starts_with("DELAY"))
+pl.concat([trial39.head(4), trial39.filter(~pl.col("content").str.starts_with("REGION")).slice(2, 6)])
+```
+
+`TRIALID E1I39D0`: **E**xperimental trial, condition **1**, item **39** (`F` = question, `P` = practice).
+`REGION CHAR` gives the position of every character; `DISPLAY ON` and `ENDBUTTON` mark the reading time.
+
+## Step 2: when was the sentence on screen? {.smaller}
+
+```{python prep-trials}
+```
+
+```{python}
+times = trial_times(gaze.messages)
+times.filter(pl.col("trial_id").str.starts_with("E")).sort("display_on").head(4)
+```
+
+## Step 3: regions (areas of interest) {.smaller}
+
+```{python prep-regions}
+```
+
+```{python}
+regions = read_regions()
+regions.filter(pl.col("trial_id") == "E1I39D0")
+```
+
+## Step 4: fixation positions and regions {.smaller}
+
+```{python prep-fixations}
+```
+
+```{python}
+fixations = fixations_on_regions(gaze, regions)
+fixations.select("trial_id", "onset", "duration", "location_x", "region").head(4)
+```
+
+`compute_event_properties` averages the samples of each fixation; `map_to_aois` looks up the region in the
+`TextStimulus` of the fixation's trial.
+
+## Step 5: keep fixations made while reading {.smaller}
+
+```{python prep-window}
+```
+
+```{python}
+reading = reading_fixations(fixations, times)
+reading.filter(pl.col("trial_id") == "E1I39D0")
+```
+
+## One trial: item 39 with comma
+
+```{python}
+#| fig-width: 11
+#| fig-height: 3.4
+import matplotlib.pyplot as plt
+
+chars = trial39.filter(pl.col("content").str.starts_with("REGION CHAR"))["content"] \
+               .str.extract_groups(r"REGION CHAR \d+ \d+ (?P<char>.) (?P<x>\d+)").struct.unnest()
+t = reading.filter(pl.col("trial_id") == "E1I39D0")
+fig, ax = plt.subplots()
+for r in regions.filter(pl.col("trial_id") == "E1I39D0").iter_rows(named=True):
+    ax.axvspan(r["x_start"], r["x_end"], color="C1" if r["region"] in (2, 3, 4) else "0.85", alpha=0.3)
+    ax.text(r["x_start"] + 4, 0.25, f"R{r['region']}", fontsize=9)
+for c, x in chars.iter_rows():
+    ax.text(int(x) + 8, 0, c, ha="center", va="center", family="monospace", fontsize=10)
+ax.plot(t["x"], 1 + (t["onset"] - t["onset"].min()) / 1000, "-o", ms=4)
+ax.set_xlim(60, 1300); ax.set_ylim(-0.4, None); ax.set_yticks([]); ax.set_xlabel("x (px)  ·  time runs upwards")
+plt.show()
+```
+
+## All participants {.smaller}
+
+```{python prep-participant}
+```
+
+`main()` runs `preprocess()` for all 30 ASC files (in parallel) and writes `fixations.csv`, `blinks.csv`,
+`questions.csv` and `regions.csv`:
+
+```{r}
+#| results: hide
+if (!file.exists("data/frases-comas/derived/simple/fixations.csv"))
+  system2(Sys.getenv("RETICULATE_PYTHON", "python3"), "commas_preprocessing.py")
+```
+
+## R: cleaning {.smaller}
+
+```{r measures-read}
+```
+
+```{r measures-short}
+```
+
+```{r measures-blinks}
+```
+
+## R: reading measures with fixated {.smaller}
+
+```{r measures-fixated}
+```
+
+```{r measures-write}
+#| echo: false
+```
+
+```{r}
+measures |> filter(region %in% 2:4) |> head(6)
+```
+
+## Statistics: data {.smaller}
+
+```{r stats-read}
+```
+
+```{r stats-accuracy}
+```
+
+The paper reports 95.6 % (89.2–100 %).
+
+```{r stats-data}
+```
+
+## Means (SE) {.smaller}
+
+```{r stats-tables}
+```
+
+Paper: sentence reading time 2523 / 2545 ms; pre-comma go-past 344 / 312; post-comma 1 go-past 397 / 425;
+post-comma 2 go-past 333 / 358 (comma present / omitted).
+
+## Mixed models {.smaller}
+
+```{r stats-models}
+```
+
+The paper fitted Bayesian ex-Gaussian models (brms), which take much longer to fit:
+
+```{r}
+#| eval: false
+brm(bf(time ~ comma + (comma | subject) + (comma | item), beta ~ comma + (comma | subject) + (comma | item)),
+    family = exgaussian(), data = d, prior = set_prior("normal(0, 100)", class = "b"))
+```
+
+## Comma effects: this analysis vs. the paper {.smaller}
+
+```{r stats-plot}
+#| echo: false
+#| fig-width: 11
+#| fig-height: 4.6
+```
+
+With a comma, readers spend longer before it (go-past) and less time after it; overall sentence reading time
+changes little (≈ 1.5 %).
+
+## Why are the numbers not identical?
+
+Same data, same conclusions — but the analysis choices differ (details in `commas_README.md`):
+
+- **Blinks**: we exclude 58 trials, the paper 124 (stricter blink rule, plus long fixations)
+- **Short fixations**: removed here; the paper merged some into neighbouring fixations
+- **Old software**: the paper's EyeDry program set long gaze (> 2 s) and total times (> 4 s) to missing, and,
+  through a bug, added fixations from earlier trials (sentence times ~80 ms too long in both conditions)
+- **Model**: mean (lme4) vs. the μ parameter of an ex-Gaussian distribution (brms); effects close to the
+  95 % boundary (sentence time, gaze duration) can land on either side
+
+Measures on the critical regions are identical to the original pipeline in about 99 % of the trials.
+
+## Summary
+
+- pymovements reads the raw file, labels trials with a message pattern, and maps fixations to areas of interest
+- fixated computes the reading measures, lme4 the statistics; the scripts are short enough to read in full
+- Write down every choice (trial window, short fixations, blinks, outliers): they change the numbers, and
+  sometimes which effects cross the 95 % line
 
 ## Running the workshop
 

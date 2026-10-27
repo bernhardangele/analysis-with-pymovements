@@ -218,3 +218,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# frases-comas cache written by frases_comas.process_all()
+workshop/data/frases-comas/derived/
+.DS_Store
+.quarto/
+workshop/Rplots.pdf
+# frases-comas: binary EDF recordings (the ASC files hold the same data) and Windows tools
+workshop/data/frases-comas/edf/*.EDF
+workshop/data/frases-comas/edf/*.exe
+workshop/data/frases-comas/edf/*.dll
+~$*

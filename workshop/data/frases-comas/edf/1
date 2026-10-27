@@ -1,0 +1,566 @@
+
+Version EYEDRY VERSION OF 1/25/2013 (compiled with mingw-GCC)
+
+
+
+60 fixations max on one item
+Starting .CRN file = commas.ctl
+0: debug level   =       0		1  qskip   =       0
+   (iff qskip = 1, interpret lookahead as corr. resp. to question
+   and if lookahead is nonzero, make the following 2 values nonzero)
+2:   lookahead        =       0
+3:   minimum question =       0
+4:   maximum question =       0
+5: smallest item      =       1
+6: largest item       =       130
+7: maximum regions    =       7
+8: smallest condition =       1
+9: largest condition  =       2
+10: number of subconds=       2
+11:position of cond # =       2
+12:position of item # =       3
+13:position of #fix   =       8
+14:data start position=       9
+15:longcutoff         =       4000
+16:shorttime          =       80
+  (next 2 zero unless rejecting on basis of questions)
+17:  pos. of ques #   =       0
+18:  pos. of ques resp=       0
+19:screen width (char)=       160
+20:max lines of text  =       1
+21: region wrap around end? 0 = no, 1 = yes:   0
+
+22: doublespace? 0 = no, 1 = yes:   0
+
+23: first_seq         =       0
+24: last_seq         =        0
+25: max_in_cond   =           0datalst = da1.lst
+Control (.CNT) file frases_c.cnt
+control file length 260
+***********************************************************
+
+type of analysis 1
+
+*****
+FFD
+*****
+Subj X Items file FFD.IXS
+
+S# 1, ****C1L1.da1****
+longcount 0 shortcount 15
+S# 2, ****C3L1.da1****
+longcount 0 shortcount 3
+S# 3, ****C4L2.da1****
+longcount 0 shortcount 12
+S# 4, ****C5L1.da1****
+longcount 0 shortcount 1
+S# 5, ****C6L2.da1****
+longcount 0 shortcount 7
+S# 6, ****C7L1.da1****
+longcount 0 shortcount 4
+S# 7, ****C8L2.da1****
+longcount 0 shortcount 1
+S# 8, ****C9L1.da1****
+longcount 0 shortcount 12
+S# 9, ****D1L2.da1****
+longcount 0 shortcount 4
+S# 10, ****D2L1.da1****
+longcount 0 shortcount 16
+S# 11, ****D3L2.da1****
+longcount 0 shortcount 4
+S# 12, ****D4L1.da1****
+longcount 0 shortcount 2
+S# 13, ****D5L2.da1****
+longcount 0 shortcount 3
+S# 14, ****D6L1.da1****
+longcount 0 shortcount 18
+S# 15, ****D7L2.da1****
+longcount 0 shortcount 7
+S# 16, ****D8L1.da1****
+longcount 0 shortcount 7
+S# 17, ****D9L2.da1****
+longcount 0 shortcount 7
+S# 18, ****E1L1.da1****
+longcount 0 shortcount 11
+S# 19, ****E2L2.da1****
+longcount 0 shortcount 9
+S# 20, ****E3L1.da1****
+longcount 0 shortcount 6
+S# 21, ****E4L2.da1****
+longcount 0 shortcount 16
+S# 22, ****E5L1.da1****
+longcount 0 shortcount 2
+S# 23, ****E6L2.da1****
+longcount 0 shortcount 10
+S# 24, ****E7L1.da1****
+longcount 0 shortcount 10
+S# 25, ****E8L2.da1****
+longcount 0 shortcount 3
+S# 26, ****F1L2.da1****
+longcount 0 shortcount 16
+S# 27, ****F3L2.da1****
+longcount 0 shortcount 2
+S# 28, ****F4L2.da1****
+longcount 0 shortcount 2
+S# 29, ****F5L1.da1****
+longcount 0 shortcount 20
+S# 30, ****F6L2.da1****
+longcount 0 shortcount 3
+S# 31, ****F7L1.da1****
+longcount 0 shortcount 4
+
+***** OUTPUT *****
+1
+*****
+
+First fixation
+
+THROWING AWAY trials with no fixations.
+
+AVERAGED OVER ITEMS AND SUBJECTS, BY CONDITIONS
+
+Means where each subject gets equal weight
+COND  1   205 (31)  220 (31)  224 (31)  223 (31)  230 (31)  341 ( 2)    0 ( 0)
+COND  2   206 (31)  216 (31)  228 (31)  228 (31)  230 (31)  445 ( 1)    0 ( 0)
+
+Means where each response receives equal weight; under test - report problems please
+COND  1   205 (1998)  220 (1828)  225 (1867)  224 (1867)  232 (1891)  341 ( 2)    0 ( 0)
+COND  2   206 (2007)  216 (1865)  229 (1886)  229 (1888)  231 (1867)  445 ( 1)    0 ( 0)
+type of analysis 1
+
+*****
+FFD-W
+*****
+Subj X Items file FFDW.IXS
+
+ S# 1
+longcount 0 shortcount 15
+ S# 2
+longcount 0 shortcount 3
+ S# 3
+longcount 0 shortcount 12
+ S# 4
+longcount 0 shortcount 1
+ S# 5
+longcount 0 shortcount 7
+ S# 6
+longcount 0 shortcount 4
+ S# 7
+longcount 0 shortcount 1
+ S# 8
+longcount 0 shortcount 12
+ S# 9
+longcount 0 shortcount 4
+ S# 10
+longcount 0 shortcount 16
+ S# 11
+longcount 0 shortcount 4
+ S# 12
+longcount 0 shortcount 2
+ S# 13
+longcount 0 shortcount 3
+ S# 14
+longcount 0 shortcount 18
+ S# 15
+longcount 0 shortcount 7
+ S# 16
+longcount 0 shortcount 7
+ S# 17
+longcount 0 shortcount 7
+ S# 18
+longcount 0 shortcount 11
+ S# 19
+longcount 0 shortcount 9
+ S# 20
+longcount 0 shortcount 6
+ S# 21
+longcount 0 shortcount 16
+ S# 22
+longcount 0 shortcount 2
+ S# 23
+longcount 0 shortcount 10
+ S# 24
+longcount 0 shortcount 10
+ S# 25
+longcount 0 shortcount 3
+ S# 26
+longcount 0 shortcount 16
+ S# 27
+longcount 0 shortcount 2
+ S# 28
+longcount 0 shortcount 2
+ S# 29
+longcount 0 shortcount 20
+ S# 30
+longcount 0 shortcount 3
+ S# 31
+longcount 0 shortcount 4
+
+***** OUTPUT *****
+1
+*****
+
+First fixation
+
+THROWING AWAY trials with no fixations.
+
+AVERAGED OVER ITEMS AND SUBJECTS, BY CONDITIONS
+
+Means where each subject gets equal weight
+COND  1   205 (31)  220 (31)  224 (31)  223 (31)  230 (31)  341 ( 2)    0 ( 0)
+COND  2   206 (31)  216 (31)  228 (31)  228 (31)  230 (31)  445 ( 1)    0 ( 0)
+
+Means where each response receives equal weight; under test - report problems please
+COND  1   205 (1998)  220 (1828)  225 (1867)  224 (1867)  232 (1891)  341 ( 2)    0 ( 0)
+COND  2   206 (2007)  216 (1865)  229 (1886)  229 (1888)  231 (1867)  445 ( 1)    0 ( 0)
+type of analysis 2
+
+*****
+GD
+*****
+cumulating multiple phrases in a region
+Subj X Items file GD.IXS
+
+ S# 1
+ Long gaze duration 2174: item 12 cond 2 region 5
+ Long gaze duration 2064: item 96 cond 2 region 1
+ Long gaze duration 2092: item 118 cond 2 region 5
+ Long gaze duration 2033: item 92 cond 2 region 1
+ Long gaze duration 2085: item 33 cond 1 region 5
+ Long gaze duration 2235: item 104 cond 2 region 5
+longcount 0 shortcount 41
+ S# 2
+ Long gaze duration 2188: item 90 cond 2 region 5
+ Long gaze duration 2148: item 46 cond 2 region 5
+ Long gaze duration 2331: item 96 cond 2 region 5
+ Long gaze duration 2043: item 84 cond 2 region 5
+ Long gaze duration 2095: item 115 cond 1 region 5
+longcount 0 shortcount 52
+ S# 3
+longcount 0 shortcount 55
+ S# 4
+ Long gaze duration 2092: item 76 cond 2 region 5
+ Long gaze duration 2078: item 96 cond 2 region 1
+ Long gaze duration 2058: item 31 cond 1 region 1
+ Long gaze duration 2005: item 15 cond 1 region 1
+ Long gaze duration 2017: item 37 cond 1 region 1
+ Long gaze duration 2721: item 46 cond 2 region 5
+ Long gaze duration 2054: item 124 cond 2 region 5
+ Long gaze duration 2709: item 22 cond 2 region 5
+ Long gaze duration 2060: item 32 cond 2 region 5
+ Long gaze duration 2040: item 27 cond 1 region 1
+ Long gaze duration 2215: item 14 cond 2 region 1
+ Long gaze duration 2093: item 104 cond 2 region 5
+ Long gaze duration 2182: item 51 cond 1 region 5
+ Long gaze duration 2202: item 54 cond 2 region 5
+longcount 0 shortcount 16
+ S# 5
+ Long gaze duration 2135: item 121 cond 2 region 5
+ Long gaze duration 2115: item 104 cond 1 region 5
+ Long gaze duration 2090: item 48 cond 1 region 1
+ Long gaze duration 2308: item 37 cond 2 region 5
+longcount 0 shortcount 14
+ S# 6
+ Long gaze duration 2013: item 104 cond 2 region 5
+ Long gaze duration 2020: item 84 cond 2 region 5
+ Long gaze duration 2081: item 38 cond 2 region 1
+longcount 0 shortcount 7
+ S# 7
+ Long gaze duration 2003: item 23 cond 2 region 1
+ Long gaze duration 2019: item 44 cond 1 region 1
+ Long gaze duration 2216: item 89 cond 2 region 1
+ Long gaze duration 2159: item 59 cond 2 region 1
+ Long gaze duration 2015: item 120 cond 1 region 3
+ Long gaze duration 2115: item 84 cond 1 region 5
+longcount 0 shortcount 4
+ S# 8
+longcount 0 shortcount 125
+ S# 9
+ Long gaze duration 2028: item 95 cond 2 region 1
+ Long gaze duration 2189: item 33 cond 2 region 5
+longcount 0 shortcount 8
+ S# 10
+longcount 0 shortcount 45
+ S# 11
+ Long gaze duration 2084: item 84 cond 1 region 5
+ Long gaze duration 2126: item 25 cond 2 region 1
+ Long gaze duration 2260: item 104 cond 1 region 5
+ Long gaze duration 2141: item 126 cond 1 region 5
+ Long gaze duration 2041: item 123 cond 2 region 5
+ Long gaze duration 2020: item 98 cond 1 region 5
+longcount 0 shortcount 51
+ S# 12
+longcount 0 shortcount 12
+ S# 13
+ Long gaze duration 2130: item 99 cond 2 region 1
+ Long gaze duration 2314: item 84 cond 1 region 5
+ Long gaze duration 2025: item 124 cond 1 region 3
+ Long gaze duration 2006: item 85 cond 2 region 5
+ Long gaze duration 2212: item 92 cond 1 region 1
+ Long gaze duration 2014: item 104 cond 1 region 5
+longcount 0 shortcount 6
+ S# 14
+longcount 0 shortcount 30
+ S# 15
+longcount 0 shortcount 11
+ S# 16
+ Long gaze duration 2141: item 51 cond 1 region 5
+longcount 0 shortcount 25
+ S# 17
+ Long gaze duration 2521: item 28 cond 1 region 5
+ Long gaze duration 2276: item 85 cond 2 region 5
+ Long gaze duration 2030: item 72 cond 1 region 5
+ Long gaze duration 2250: item 3 cond 2 region 5
+ Long gaze duration 2062: item 78 cond 1 region 5
+ Long gaze duration 2150: item 14 cond 1 region 1
+longcount 0 shortcount 32
+ S# 18
+longcount 0 shortcount 22
+ S# 19
+longcount 0 shortcount 12
+ S# 20
+ Long gaze duration 2140: item 104 cond 2 region 5
+ Long gaze duration 2073: item 96 cond 2 region 1
+longcount 0 shortcount 10
+ S# 21
+longcount 0 shortcount 76
+ S# 22
+ Long gaze duration 2152: item 104 cond 2 region 5
+ Long gaze duration 2400: item 10 cond 2 region 5
+ Long gaze duration 2180: item 27 cond 1 region 1
+ Long gaze duration 2071: item 101 cond 1 region 1
+longcount 0 shortcount 5
+ S# 23
+longcount 0 shortcount 57
+ S# 24
+longcount 0 shortcount 25
+ S# 25
+longcount 0 shortcount 12
+ S# 26
+ Long gaze duration 2068: item 14 cond 1 region 1
+longcount 0 shortcount 52
+ S# 27
+ Long gaze duration 2084: item 38 cond 1 region 1
+longcount 0 shortcount 5
+ S# 28
+longcount 0 shortcount 11
+ S# 29
+longcount 0 shortcount 69
+ S# 30
+ Long gaze duration 2051: item 12 cond 1 region 5
+longcount 0 shortcount 7
+ S# 31
+longcount 0 shortcount 13
+
+***** OUTPUT *****
+GD
+*****
+
+First pass time (gaze duration if one-word regions)
+Upper cutoff for gaze duration 2000
+
+THROWING AWAY trials with no fixations.
+
+AVERAGED OVER ITEMS AND SUBJECTS, BY CONDITIONS
+
+Means where each subject gets equal weight
+COND  1   721 (31)  286 (31)  377 (31)  301 (31)  617 (31)  341 ( 2)    0 ( 0)
+COND  2   719 (31)  271 (31)  384 (31)  307 (31)  626 (31)  445 ( 1)    0 ( 0)
+
+Means where each response receives equal weight; under test - report problems please
+COND  1   721 (1986)  288 (1828)  379 (1865)  302 (1867)  627 (1875)  341 ( 2)    0 ( 0)
+COND  2   719 (1995)  271 (1865)  386 (1886)  309 (1888)  637 (1841)  445 ( 1)    0 ( 0)
+type of analysis 13
+
+*****
+gopast
+*****
+cumulating multiple phrases in a region
+Subj X Items file GOPAST.IXS
+
+ S# 1
+longcount 0 shortcount 53
+ S# 2
+longcount 0 shortcount 65
+ S# 3
+longcount 0 shortcount 78
+ S# 4
+longcount 1 shortcount 19
+ S# 5
+longcount 0 shortcount 22
+ S# 6
+longcount 0 shortcount 7
+ S# 7
+longcount 0 shortcount 6
+ S# 8
+longcount 3 shortcount 150
+ S# 9
+longcount 0 shortcount 14
+ S# 10
+longcount 0 shortcount 51
+ S# 11
+longcount 1 shortcount 64
+ S# 12
+longcount 0 shortcount 15
+ S# 13
+longcount 0 shortcount 13
+ S# 14
+longcount 0 shortcount 40
+ S# 15
+longcount 0 shortcount 14
+ S# 16
+longcount 0 shortcount 42
+ S# 17
+longcount 0 shortcount 42
+ S# 18
+longcount 0 shortcount 22
+ S# 19
+longcount 0 shortcount 19
+ S# 20
+longcount 0 shortcount 17
+ S# 21
+longcount 0 shortcount 92
+ S# 22
+longcount 0 shortcount 7
+ S# 23
+longcount 0 shortcount 72
+ S# 24
+longcount 0 shortcount 33
+ S# 25
+longcount 0 shortcount 18
+ S# 26
+longcount 0 shortcount 65
+ S# 27
+longcount 0 shortcount 10
+ S# 28
+longcount 0 shortcount 11
+ S# 29
+longcount 0 shortcount 79
+ S# 30
+longcount 0 shortcount 10
+ S# 31
+longcount 0 shortcount 20
+
+***** OUTPUT *****
+1
+*****
+
+Time from entering region to first going past it (quasi-first-pass time).
+  Sum of ALL time since entering, including time outside region.
+
+THROWING AWAY trials with no fixations.
+
+AVERAGED OVER ITEMS AND SUBJECTS, BY CONDITIONS
+
+Means where each subject gets equal weight
+COND  1   729 (31)  349 (31)  405 (31)  334 (31)  857 (31)  341 ( 2)    0 ( 0)
+COND  2   729 (31)  316 (31)  431 (31)  368 (31)  861 (31)  445 ( 1)    0 ( 0)
+
+Means where each response receives equal weight; under test - report problems please
+COND  1   730 (1998)  352 (1829)  408 (1867)  334 (1869)  871 (1892)  341 ( 2)    0 ( 0)
+COND  2   730 (2007)  317 (1867)  433 (1886)  369 (1889)  875 (1862)  445 ( 1)    0 ( 0)
+type of analysis 3
+
+*****
+TVT
+*****
+cumulating multiple phrases in a region
+Subj X Items file TVT.IXS
+
+ S# 1
+longcount 0 shortcount 53 total number fixations 1986
+proportion long times 0.000000 proportion short times 0.026687
+ S# 2
+longcount 0 shortcount 65 total number fixations 2349
+proportion long times 0.000000 proportion short times 0.027671
+ S# 3
+longcount 0 shortcount 78 total number fixations 1479
+proportion long times 0.000000 proportion short times 0.052738
+ S# 4
+ Long tt duration 4226: item 31 cond 1 region 1
+longcount 1 shortcount 19 total number fixations 2053
+proportion long times 0.000487 proportion short times 0.009255
+ S# 5
+ Long tt duration 4139: item 43 cond 2 region 1
+longcount 0 shortcount 22 total number fixations 1662
+proportion long times 0.000000 proportion short times 0.013237
+ S# 6
+ Long tt duration 4171: item 84 cond 2 region 5
+longcount 0 shortcount 7 total number fixations 1669
+proportion long times 0.000000 proportion short times 0.004194
+ S# 7
+longcount 0 shortcount 6 total number fixations 1546
+proportion long times 0.000000 proportion short times 0.003881
+ S# 8
+longcount 3 shortcount 150 total number fixations 2125
+proportion long times 0.001412 proportion short times 0.070588
+ S# 9
+ Long tt duration 4132: item 71 cond 2 region 1
+longcount 0 shortcount 14 total number fixations 1770
+proportion long times 0.000000 proportion short times 0.007910
+ S# 10
+ Long tt duration 5306: item 38 cond 2 region 1
+longcount 0 shortcount 51 total number fixations 1497
+proportion long times 0.000000 proportion short times 0.034068
+ S# 11
+ Long tt duration 4595: item 55 cond 2 region 1
+ Long tt duration 4156: item 25 cond 2 region 1
+ Long tt duration 4069: item 104 cond 1 region 1
+longcount 1 shortcount 63 total number fixations 2057
+proportion long times 0.000486 proportion short times 0.030627
+ S# 12
+ Long tt duration 4869: item 1 cond 1 region 1
+longcount 0 shortcount 15 total number fixations 1486
+proportion long times 0.000000 proportion short times 0.010094
+ S# 13
+ Long tt duration 4746: item 99 cond 2 region 1
+longcount 0 shortcount 13 total number fixations 1944
+proportion long times 0.000000 proportion short times 0.006687
+ S# 14
+ Long tt duration 4150: item 12 cond 2 region 1
+ Long tt duration 4464: item 78 cond 2 region 1
+longcount 0 shortcount 40 total number fixations 1842
+proportion long times 0.000000 proportion short times 0.021716
+ S# 15
+longcount 0 shortcount 14 total number fixations 957
+proportion long times 0.000000 proportion short times 0.014629
+ S# 16
+longcount 0 shortcount 42 total number fixations 1477
+proportion long times 0.000000 proportion short times 0.028436
+ S# 17
+ Long tt duration 5020: item 1 cond 2 region 1
+longcount 0 shortcount 42 total number fixations 1808
+proportion long times 0.000000 proportion short times 0.023230
+ S# 18
+longcount 0 shortcount 22 total number fixations 1634
+proportion long times 0.000000 proportion short times 0.013464
+ S# 19
+longcount 0 shortcount 19 total number fixations 1001
+proportion long times 0.000000 proportion short times 0.018981
+ S# 20
+ Long tt duration 4485: item 23 cond 1 region 1
+longcount 0 shortcount 17 total number fixations 1531
+proportion long times 0.000000 proportion short times 0.011104
+ S# 21
+longcount 0 shortcount 92 total number fixations 1303
+proportion long times 0.000000 proportion short times 0.070606
+ S# 22
+ Long tt duration 4450: item 63 cond 1 region 1
+longcount 0 shortcount 7 total number fixations 1693
+proportion long times 0.000000 proportion short times 0.004135
+ S# 23
+longcount 0 shortcount 72 total number fixations 1622
+proportion long times 0.000000 proportion short times 0.044390
+ S# 24
+longcount 0 shortcount 33 total number fixations 1425
+proportion long times 0.000000 proportion short times 0.023158
+ S# 25
+ Long tt duration 4156: item 14 cond 1 region 1
+longcount 0 shortcount 18 total number fixations 1237
+proportion long times 0.000000 proportion short times 0.014551
+ S# 26
+longcount 0 shortcount 65 total number fixations 2038
+proportion long times 0.000000 proportion short times 0.031894
+ S# 27
+longcount 0 shortcount 10 total number fixations 1507
+proportion long times 0.000000 proportion shor

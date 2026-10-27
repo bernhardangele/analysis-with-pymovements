@@ -1,0 +1,150 @@
+Mapping fixations to characters.
+Combining temporally adjacent fixations that are within 16 pixels of each other if at least one of them is below 80 ms.
+Output file name:	C1L1.[A[Bda1
+C1L1.[A[Bda1	condition:  2	 item: 4	combining fixation 1 with next fixation
+C1L1.[A[Bda1	condition:  2	 item: 128	combining fixation 10 with previous fixation
+C1L1.[A[Bda1	condition:  1	 item: 71	combining fixation 6 with previous fixation
+Output file name:	C3L1.[A[Bda1
+C3L1.[A[Bda1	condition:  2	 item: 8	combining fixation 10 with previous fixation
+C3L1.[A[Bda1	condition:  2	 item: 30	combining fixation 15 with previous fixation
+C3L1.[A[Bda1	condition:  2	 item: 120	combining fixation 3 with previous fixation
+C3L1.[A[Bda1	condition:  2	 item: 14	combining fixation 1 with next fixation
+C3L1.[A[Bda1	condition:  1	 item: 79	combining fixation 4 with previous fixation
+Output file name:	C4L2.[A[Bda1
+C4L2.[A[Bda1	condition:  1	 item: 98	combining fixation 6 with previous fixation
+C4L2.[A[Bda1	condition:  1	 item: 100	combining fixation 11 with previous fixation
+C4L2.[A[Bda1	condition:  2	 item: 91	combining fixation 3 with previous fixation
+C4L2.[A[Bda1	condition:  1	 item: 126	combining fixation 6 with previous fixation
+C4L2.[A[Bda1	condition:  1	 item: 126	combining fixation 9 with previous fixation
+C4L2.[A[Bda1	condition:  1	 item: 36	combining fixation 8 with previous fixation
+C4L2.[A[Bda1	condition:  1	 item: 110	combining fixation 11 with previous fixation
+C4L2.[A[Bda1	condition:  1	 item: 76	combining fixation 5 with previous fixation
+C4L2.[A[Bda1	condition:  1	 item: 92	combining fixation 3 with previous fixation
+C4L2.[A[Bda1	condition:  2	 item: 29	combining fixation 5 with previous fixation
+Output file name:	C5L1.[A[Bda1
+C5L1.[A[Bda1	condition:  1	 item: 79	combining fixation 15 with next fixation
+C5L1.[A[Bda1	condition:  2	 item: 48	combining fixation 3 with previous fixation
+C5L1.[A[Bda1	condition:  2	 item: 32	combining fixation 7 with previous fixation
+C5L1.[A[Bda1	condition:  2	 item: 16	combining fixation 6 with previous fixation
+C5L1.[A[Bda1	condition:  1	 item: 9	combining fixation 6 with previous fixation
+C5L1.[A[Bda1	condition:  1	 item: 115	combining fixation 1 with next fixation
+Output file name:	C6L2.[A[Bda1
+C6L2.[A[Bda1	condition:  1	 item: 74	combining fixation 3 with previous fixation
+C6L2.[A[Bda1	condition:  2	 item: 103	combining fixation 7 with previous fixation
+Output file name:	C7L1.[A[Bda1
+C7L1.[A[Bda1	condition:  1	 item: 25	combining fixation 1 with next fixation
+C7L1.[A[Bda1	condition:  2	 item: 18	combining fixation 5 with previous fixation
+Output file name:	C8L2.[A[Bda1
+C8L2.[A[Bda1	condition:  2	 item: 101	combining fixation 1 with next fixation
+Output file name:	C9L1.[A[Bda1
+C9L1.[A[Bda1	condition:  1	 item: 117	combining fixation 3 with previous fixation
+C9L1.[A[Bda1	condition:  2	 item: 126	combining fixation 3 with previous fixation
+C9L1.[A[Bda1	condition:  2	 item: 14	combining fixation 13 with previous fixation
+C9L1.[A[Bda1	condition:  2	 item: 14	combining fixation 16 with previous fixation
+C9L1.[A[Bda1	condition:  1	 item: 45	combining fixation 1 with next fixation
+C9L1.[A[Bda1	condition:  1	 item: 81	combining fixation 1 with next fixation
+C9L1.[A[Bda1	condition:  1	 item: 11	combining fixation 3 with previous fixation
+C9L1.[A[Bda1	condition:  2	 item: 22	combining fixation 13 with previous fixation
+C9L1.[A[Bda1	condition:  2	 item: 8	combining fixation 11 with previous fixation
+C9L1.[A[Bda1	condition:  2	 item: 38	combining fixation 15 with previous fixation
+C9L1.[A[Bda1	condition:  2	 item: 42	combining fixation 1 with next fixation
+Output file name:	D1L2.[A[Bda1
+Output file name:	D2L1.[A[Bda1
+Output file name:	D3L2.[A[Bda1
+D3L2.[A[Bda1	condition:  2	 item: 91	combining fixation 6 with previous fixation
+D3L2.[A[Bda1	condition:  1	 item: 120	combining fixation 5 with previous fixation
+D3L2.[A[Bda1	condition:  1	 item: 116	combining fixation 7 with previous fixation
+D3L2.[A[Bda1	condition:  1	 item: 44	combining fixation 6 with previous fixation
+Output file name:	D4L1.[A[Bda1
+D4L1.[A[Bda1	condition:  1	 item: 13	combining fixation 1 with next fixation
+D4L1.[A[Bda1	condition:  1	 item: 99	combining fixation 1 with next fixation
+D4L1.[A[Bda1	condition:  2	 item: 22	combining fixation 1 with next fixation
+D4L1.[A[Bda1	condition:  1	 item: 25	combining fixation 1 with next fixation
+Output file name:	D5L2.[A[Bda1
+D5L2.[A[Bda1	condition:  1	 item: 42	combining fixation 1 with next fixation
+D5L2.[A[Bda1	condition:  2	 item: 123	combining fixation 1 with next fixation
+Output file name:	D6L1.[A[Bda1
+D6L1.[A[Bda1	condition:  1	 item: 7	combining fixation 1 with next fixation
+D6L1.[A[Bda1	condition:  2	 item: 62	combining fixation 3 with previous fixation
+D6L1.[A[Bda1	condition:  1	 item: 107	combining fixation 1 with next fixation
+D6L1.[A[Bda1	condition:  1	 item: 105	combining fixation 1 with next fixation
+Output file name:	D7L2.[A[Bda1
+D7L2.[A[Bda1	condition:  2	 item: 111	combining fixation 1 with next fixation
+Output file name:	D8L1.[A[Bda1
+D8L1.[A[Bda1	condition:  2	 item: 108	combining fixation 1 with next fixation
+D8L1.[A[Bda1	condition:  1	 item: 105	combining fixation 1 with next fixation
+D8L1.[A[Bda1	condition:  2	 item: 130	combining fixation 1 with next fixation
+D8L1.[A[Bda1	condition:  2	 item: 76	combining fixation 9 with previous fixation
+D8L1.[A[Bda1	condition:  1	 item: 61	combining fixation 1 with next fixation
+Output file name:	D9L2.[A[Bda1
+D9L2.[A[Bda1	condition:  1	 item: 126	combining fixation 1 with next fixation
+D9L2.[A[Bda1	condition:  1	 item: 84	combining fixation 9 with previous fixation
+D9L2.[A[Bda1	condition:  2	 item: 69	combining fixation 4 with previous fixation
+D9L2.[A[Bda1	condition:  2	 item: 9	combining fixation 7 with previous fixation
+Output file name:	E1L1.[A[Bda1
+E1L1.[A[Bda1	condition:  1	 item: 73	combining fixation 18 with next fixation
+E1L1.[A[Bda1	condition:  1	 item: 43	combining fixation 7 with previous fixation
+E1L1.[A[Bda1	condition:  1	 item: 115	combining fixation 4 with previous fixation
+E1L1.[A[Bda1	condition:  1	 item: 115	combining fixation 11 with previous fixation
+E1L1.[A[Bda1	condition:  2	 item: 88	combining fixation 1 with next fixation
+Output file name:	E2L2.[A[Bda1
+E2L2.[A[Bda1	condition:  2	 item: 117	combining fixation 1 with next fixation
+E2L2.[A[Bda1	condition:  1	 item: 92	combining fixation 5 with previous fixation
+E2L2.[A[Bda1	condition:  2	 item: 29	combining fixation 1 with next fixation
+E2L2.[A[Bda1	condition:  2	 item: 111	combining fixation 1 with next fixation
+E2L2.[A[Bda1	condition:  2	 item: 53	combining fixation 1 with next fixation
+Output file name:	E3L1.[A[Bda1
+Output file name:	E4L2.[A[Bda1
+E4L2.[A[Bda1	condition:  2	 item: 93	combining fixation 5 with previous fixation
+E4L2.[A[Bda1	condition:  2	 item: 65	combining fixation 1 with next fixation
+E4L2.[A[Bda1	condition:  1	 item: 50	combining fixation 3 with previous fixation
+Output file name:	E5L1.[A[Bda1
+E5L1.[A[Bda1	condition:  2	 item: 76	combining fixation 1 with next fixation
+E5L1.[A[Bda1	condition:  1	 item: 37	combining fixation 1 with next fixation
+E5L1.[A[Bda1	condition:  2	 item: 78	combining fixation 1 with next fixation
+E5L1.[A[Bda1	condition:  1	 item: 119	combining fixation 9 with previous fixation
+E5L1.[A[Bda1	condition:  2	 item: 66	combining fixation 1 with next fixation
+E5L1.[A[Bda1	condition:  2	 item: 48	combining fixation 1 with next fixation
+E5L1.[A[Bda1	condition:  2	 item: 8	combining fixation 1 with next fixation
+E5L1.[A[Bda1	condition:  2	 item: 112	combining fixation 1 with next fixation
+E5L1.[A[Bda1	condition:  2	 item: 68	combining fixation 6 with previous fixation
+E5L1.[A[Bda1	condition:  2	 item: 126	combining fixation 1 with next fixation
+E5L1.[A[Bda1	condition:  1	 item: 109	combining fixation 1 with next fixation
+E5L1.[A[Bda1	condition:  2	 item: 56	combining fixation 1 with next fixation
+Output file name:	E6L2.[A[Bda1
+E6L2.[A[Bda1	condition:  2	 item: 85	combining fixation 1 with next fixation
+E6L2.[A[Bda1	condition:  2	 item: 125	combining fixation 1 with next fixation
+E6L2.[A[Bda1	condition:  2	 item: 125	combining fixation 9 with previous fixation
+E6L2.[A[Bda1	condition:  1	 item: 124	combining fixation 10 with previous fixation
+E6L2.[A[Bda1	condition:  2	 item: 59	combining fixation 1 with next fixation
+Output file name:	E7L1.[A[Bda1
+E7L1.[A[Bda1	condition:  2	 item: 84	combining fixation 1 with next fixation
+Output file name:	E8L2.[A[Bda1
+Output file name:	F1L2.[A[Bda1
+F1L2.[A[Bda1	condition:  1	 item: 76	combining fixation 11 with previous fixation
+F1L2.[A[Bda1	condition:  2	 item: 123	combining fixation 10 with previous fixation
+F1L2.[A[Bda1	condition:  1	 item: 20	combining fixation 1 with next fixation
+F1L2.[A[Bda1	condition:  2	 item: 63	combining fixation 5 with previous fixation
+F1L2.[A[Bda1	condition:  2	 item: 63	combining fixation 8 with previous fixation
+F1L2.[A[Bda1	condition:  1	 item: 108	combining fixation 5 with previous fixation
+F1L2.[A[Bda1	condition:  1	 item: 56	combining fixation 1 with next fixation
+F1L2.[A[Bda1	condition:  1	 item: 92	combining fixation 17 with previous fixation
+F1L2.[A[Bda1	condition:  2	 item: 31	combining fixation 10 with previous fixation
+F1L2.[A[Bda1	condition:  2	 item: 101	combining fixation 1 with next fixation
+F1L2.[A[Bda1	condition:  2	 item: 59	combining fixation 3 with previous fixation
+F1L2.[A[Bda1	condition:  2	 item: 117	combining fixation 3 with next fixation
+Output file name:	F3L2.[A[Bda1
+F3L2.[A[Bda1	condition:  1	 item: 76	combining fixation 1 with next fixation
+F3L2.[A[Bda1	condition:  2	 item: 43	combining fixation 1 with next fixation
+F3L2.[A[Bda1	condition:  1	 item: 12	combining fixation 1 with next fixation
+Output file name:	F4L2.[A[Bda1
+Output file name:	F5L1.[A[Bda1
+F5L1.[A[Bda1	condition:  1	 item: 87	combining fixation 8 with previous fixation
+F5L1.[A[Bda1	condition:  1	 item: 121	combining fixation 6 with previous fixation
+F5L1.[A[Bda1	condition:  1	 item: 95	combining fixation 13 with previous fixation
+Output file name:	F6L2.[A[Bda1
+Output file name:	F7L1.[A[Bda1
+F7L1.[A[Bda1	condition:  1	 item: 77	combining fixation 1 with next fixation
+F7L1.[A[Bda1	condition:  1	 item: 81	combining fixation 1 with next fixation
+F7L1.[A[Bda1	condition:  2	 item: 58	combining fixation 1 with next fixation
+F7L1.[A[Bda1	condition:  1	 item: 55	combining fixation 1 with next fixation

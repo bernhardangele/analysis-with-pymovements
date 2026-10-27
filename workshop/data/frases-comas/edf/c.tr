@@ -1,0 +1,50 @@
+
+Version EYEDRY VERSION OF 1/25/2013 (compiled with mingw-GCC)
+
+
+
+60 fixations max on one item
+Starting .CRN file = commas.ctl
+0: debug level   =       0		1  qskip   =       0
+   (iff qskip = 1, interpret lookahead as corr. resp. to question
+   and if lookahead is nonzero, make the following 2 values nonzero)
+2:   lookahead        =       0
+3:   minimum question =       0
+4:   maximum question =       0
+5: smallest item      =       1
+6: largest item       =       130
+7: maximum regions    =       7
+8: smallest condition =       1
+9: largest condition  =       2
+10: number of subconds=       2
+11:position of cond # =       2
+12:position of item # =       3
+13:position of #fix   =       8
+14:data start position=       9
+15:longcutoff         =       4000
+16:shorttime          =       80
+  (next 2 zero unless rejecting on basis of questions)
+17:  pos. of ques #   =       0
+18:  pos. of ques resp=       0
+19:screen width (char)=       160
+20:max lines of text  =       1
+21: region wrap around end? 0 = no, 1 = yes:   0
+
+22: doublespace? 0 = no, 1 = yes:   0
+
+23: first_seq         =       0
+24: last_seq         =        0
+25: max_in_cond   =           0.CRN file = commas.ctl
+datalst = da1.lst
+Control (.CNT) file frases_c.cnt
+control file length 259
+***********************************************************
+
+type of analysis 1
+
+*****
+
+*****
+Subj X Items file FFD.IXS
+
+S# 1, ****C1L1.da1****

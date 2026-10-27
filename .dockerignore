@@ -1,0 +1,9 @@
+**/.DS_Store
+.git
+# frases-comas: binary EDF recordings (~790 MB) and Windows tools are not needed; the ASC files are
+workshop/data/frases-comas/edf/*.EDF
+workshop/data/frases-comas/edf/*.exe
+workshop/data/frases-comas/edf/*.dll
+workshop/data/frases-comas/derived
+workshop/presentation.html
+workshop/presentation_files
