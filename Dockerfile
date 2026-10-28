@@ -13,6 +13,12 @@ ENV RETICULATE_PYTHON=/opt/venv/bin/python
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt jupyter pyyaml
 
+# Development only: Playwright + Chromium for tools/check_slides.py (checks that every slide fits)
+COPY requirements-dev.txt /tmp/requirements-dev.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-dev.txt \
+    && PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright install --with-deps chromium
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+
 COPY install_r_packages.R /tmp/install_r_packages.R
 RUN Rscript /tmp/install_r_packages.R
 

@@ -3,6 +3,11 @@ title: "Analysing reading and visual world eye-tracking experiments with pymovem
 format:
   revealjs:
     embed-resources: true
+    width: 1280
+    height: 720
+    theme: [default, assets/custom.scss]
+    include-after-body: assets/scripts.html
+    code-line-numbers: false
 engine: knitr
 ---
 
@@ -11,16 +16,77 @@ engine: knitr
 library(reticulate)
 library(tidyverse)
 use_python(Sys.getenv("RETICULATE_PYTHON", unset = Sys.which("python3")), required = TRUE)
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 11, fig.height = 5, dpi = 150, out.width = "100%")
 # code of the Part 2 slides comes from the analysis scripts ("## ---- name" sections)
 for (f in c("commas_preprocessing.py", "commas_statistics.R")) knitr::read_chunk(f)
 ```
 
+## Where this workshop fits
+
+::: {.pipeline}
+::: {.stage}
+**Recording** [OpenSesame + PyGaze workshop](https://github.com/bernhardangele/eye-movement-experiments-with-opensesame): reading, boundary, moving window, visual world
+:::
+::: {.arrow}
+→
+:::
+::: {.stage}
+**Raw data** EyeLink EDF → ASC: samples, fixations, saccades, blinks, **messages**
+:::
+::: {.arrow}
+→
+:::
+::: {.stage}
+**This workshop** analysis with pymovements (Python) and R
+:::
+:::
+
+- The [recording workshop](https://github.com/bernhardangele/eye-movement-experiments-with-opensesame) builds the experiments; every trial has the same skeleton: drift correction →
+  gaze target at the sentence start → sentence (`STIMONSET`) → fixate the corner square (`TRIALEND`) →
+  comprehension question.
+- Here we analyse what such experiments record: one EyeLink recording (Part 1), then a complete published
+  experiment (Part 2), which was recorded with the UMass EyeTrack software instead of OpenSesame.
+
 ## Workflow
 
-1. **Python (pymovements)**: read the raw EyeLink ASC file, convert pixels to degrees, compute velocities, detect
-   fixations, map them to words, compute reading measures (FFD, GD, GPT, TVT, ...).
-2. **R (tidyverse, lme4)**: plots and statistics.
+::: {.pipeline}
+::: {.stage}
+**Read** `from_asc`: samples, events, messages
+:::
+::: {.arrow}
+→
+:::
+::: {.stage}
+**Samples** pixels → degrees → velocity
+:::
+::: {.arrow}
+→
+:::
+::: {.stage}
+**Fixations** I-DT or Engbert & Kliegl
+:::
+::: {.arrow}
+→
+:::
+::: {.stage}
+**Words** `TextStimulus`, `map_to_aois`
+:::
+::: {.arrow}
+→
+:::
+::: {.stage}
+**Measures** `compute_reading_measures`
+:::
+::: {.arrow}
+→
+:::
+::: {.stage .r}
+**R** plots, mixed models (lme4)
+:::
+:::
+
+Everything up to the reading measures is done in Python with **pymovements**; R does plots and statistics.
 
 All results are computed from a **real binocular EyeLink recording**
 (`data/sub_1_example.asc`, Spanish sentence reading, 1000 Hz, 4 trials), the example file shipped with the R package `fixated`.
@@ -39,7 +105,7 @@ gaze_raw.samples.head(3)
 
 Samples are binocular: `pixel` holds `[x_left, y_left, x_right, y_right]`.
 
-## Trials and word boundaries from the messages
+## Trials from the messages
 
 ```{python}
 trials = (
@@ -54,12 +120,18 @@ trials = (
         pl.col("time").filter(pl.col("content") == "DISPLAY OFF").first().alias("display_off"),
     )
 )
+trials
+```
 
+## Word boundaries from the messages
+
+```{python}
 words = (
     messages.filter(pl.col("content").str.contains(r"^TRIAL \d+ ITEM"))
     .with_columns(
         pl.col("content").str.extract_groups(
-            r"^TRIAL (?P<trial>\d+) ITEM (?P<item>\d+) WORD (?P<word_id>\d+) (?P<word>\S+) RIGHT_BOUNDARY (?P<x_end>\d+)"
+            r"^TRIAL (?P<trial>\d+) ITEM (?P<item>\d+) WORD (?P<word_id>\d+) (?P<word>\S+)"
+            r" RIGHT_BOUNDARY (?P<x_end>\d+)"
         ).alias("d")
     )
     .unnest("d")
@@ -69,7 +141,7 @@ words = (
     # the left edge of a word is the right boundary of the previous one
     .with_columns(pl.col("x_end").shift(1).over("trial").fill_null(0).alias("x_start"))
 )
-trials
+words.head(4)
 ```
 
 ## Preprocessing with pymovements
@@ -78,6 +150,7 @@ Only left-eye samples between `DISPLAY ON` and `DISPLAY OFF` are used.
 The screen geometry (53 x 29.8 cm at 60 cm) gives ~40 px/deg, matching the resolution reported by the EyeLink.
 
 ```{python}
+#| output-location: slide
 samples = (
     gaze_raw.samples
     .with_columns(pl.col("pixel").list.get(0).alias("x_pix"), pl.col("pixel").list.get(1).alias("y_pix"))
@@ -107,6 +180,8 @@ gaze.samples.head(3)
 - **Engbert & Kliegl** (velocity, adaptive): saccades are samples whose 2D velocity exceeds an elliptic threshold
   of 6 median-based standard deviations *of that trial's own velocity noise*; fixations are what lies between saccades.
 
+## I-DT with pymovements
+
 ```{python}
 def with_location(fix, samples):
     """Mean pixel position of the samples within each fixation."""
@@ -125,7 +200,12 @@ fix_idt = with_location(
     gaze.events.frame.filter(pl.col("name") == "fixation").select("trial", "onset", "offset", "duration"),
     samples,
 )
+fix_idt.head(3)
+```
 
+## Engbert & Kliegl with pymovements
+
+```{python}
 # Engbert & Kliegl (2003; Engbert & Mergenthaler 2006 threshold): detect saccades per trial, then fill the gaps
 ek = []
 for (trial,), sub in gaze.samples.group_by("trial", maintain_order=True):
@@ -135,12 +215,13 @@ for (trial,), sub in gaze.samples.group_by("trial", maintain_order=True):
 fix_ek = with_location(pl.concat(ek).select("trial", "onset", "offset", "duration"), samples)
 
 fixations = fix_ek  # used for the reading measures below
-fix_ek.head(5)
+fix_ek.head(3)
 ```
 
 ## Comparing the algorithms with EyeLink
 
 ```{python}
+#| output-location: slide
 el = pm.gaze.from_asc("data/sub_1_example.asc", events=True).events.frame
 fix_el = (
     el.filter((pl.col("name") == "fixation_eyelink") & (pl.col("eye") == "left"))
@@ -152,7 +233,9 @@ pl.concat([
     fix_ek.select("trial", "duration").with_columns(pl.lit("pymovements Engbert & Kliegl").alias("source")),
     fix_el.with_columns(pl.lit("EyeLink (left eye)").alias("source")),
 ]).group_by("source").agg(
-    pl.len().alias("n"), pl.col("duration").mean().round(1).alias("mean_ms"), pl.col("duration").median().alias("median_ms")
+    pl.len().alias("n"),
+    pl.col("duration").mean().round(1).alias("mean_ms"),
+    pl.col("duration").median().alias("median_ms"),
 ).sort("source")
 ```
 
@@ -167,6 +250,7 @@ pl.concat([
 ## Scanpath of trial 0 (shifted by 25 px for visibility)
 
 ```{python}
+#| output-location: slide
 import matplotlib.pyplot as plt
 
 t0 = fixations.filter(pl.col("trial") == 0)
@@ -180,10 +264,11 @@ i0 = fix_idt.filter(pl.col("trial") == 0)
 ax.plot(i0["avg_x"], i0["avg_y"] + 25, "--s", color="C1", alpha=0.7, label="I-DT")
 ax.legend(loc="lower right")
 ax.set_xlim(0, 1100); ax.set_ylim(1080, 500); ax.set_xlabel("x (px)"); ax.set_ylabel("y (px)")
+fig.tight_layout()
 plt.show()
 ```
 
-## Reading measures with pymovements {.smaller}
+## Reading measures with pymovements
 
 ```{python}
 from pymovements.measure.reading import compute_reading_measures
@@ -207,9 +292,14 @@ def reading_measures(fix):
     return compute_reading_measures(events.frame, words.select("trial", "word_id", "word"),
                                     word_index_column="word_id", group_columns=["trial"])
 
+```
+
+## The reading measures
+
+```{python}
 measures = reading_measures(fixations)      # Engbert & Kliegl fixations
 measures_idt = reading_measures(fix_idt)
-measures.select("trial", "word_index", "word", "FFD", "FPRT", "RPD_inc", "TFT", "FPFC", "FPReg").head(6)
+measures.select("trial", "word_index", "word", "FFD", "FPRT", "RPD_inc", "TFT", "FPFC", "FPReg").head(4)
 ```
 
 FFD = first fixation duration · FPRT = first-pass reading time (gaze duration) · RPD_inc = regression-path
@@ -238,11 +328,13 @@ measures |> head(6)
 ## Do the algorithms change the reading measures?
 
 ```{r}
+#| output-location: slide
 m_idt <- from_pymovements(py$measures_idt)
 
 bind_rows(`Engbert & Kliegl` = measures, `I-DT` = m_idt, .id = "algorithm") |>
   group_by(algorithm) |>
-  summarise(across(c(ffd, gd, tvt), \(x) round(mean(x, na.rm = TRUE), 1)), p_first_pass = round(mean(first_pass), 2))
+  summarise(across(c(ffd, gd, tvt), \(x) round(mean(x, na.rm = TRUE), 1)),
+            p_first_pass = round(mean(first_pass), 2))
 ```
 
 ## Word-level summary
@@ -273,6 +365,7 @@ round(summary(m)$coefficients, 3)
 ```
 
 ```{r}
+#| output-location: slide
 ggplot(d, aes(word_length, gd)) +
   geom_point() + geom_smooth(method = "lm", se = FALSE) +
   labs(x = "Word length (letters)", y = "Gaze duration (ms)")
@@ -284,6 +377,7 @@ Frequencies are Zipf values from **SUBTLEX-ESP** (Cuetos et al., 2011; Spanish s
 The ASC file lost the accents (`Ser?`, `cr?ticas`); these are resolved to the most frequent accented form that fits.
 
 ```{r}
+#| output-location: slide
 subtlex <- read_tsv(Sys.getenv("SUBTLEX_ESP", "data/SUBTLEX-ESP_form_zipf.txt"),
                     col_names = c("form", "zipf"), col_types = "cd", progress = FALSE)
 
@@ -299,7 +393,7 @@ lookup_zipf <- function(w) {
 freq <- measures |>
   mutate(zipf = map_dbl(word, lookup_zipf), word_length = str_length(str_remove_all(word, "[[:punct:]]")))
 cat(sum(!is.na(freq$zipf)), "of", nrow(freq), "words found in SUBTLEX-ESP\n")
-freq |> filter(trial == 0) |> select(word, zipf, ffd, gd, tvt) |> head(10)
+freq |> filter(trial == 0) |> select(word, zipf, ffd, gd, tvt) |> head(5)
 ```
 
 ## Frequency effect on gaze duration
@@ -314,6 +408,7 @@ round(summary(m_freq)$coefficients, 3)
 ```
 
 ```{r}
+#| output-location: slide
 ggplot(dz, aes(zipf, gd)) +
   geom_point() + geom_smooth(method = "lm", se = FALSE) +
   labs(x = "Word frequency (Zipf, SUBTLEX-ESP)", y = "Gaze duration (ms)")
@@ -328,6 +423,7 @@ for every 100 ms bin after display onset, which area of interest (here: word) is
 trials looking at each word. In a visual world study the AOIs would be target, competitor and distractors.
 
 ```{r}
+#| output-location: slide
 onsets <- py$trials |> as_tibble() |> transmute(trial = as.integer(trial), display_on = as.numeric(display_on))
 bins <- crossing(trial = onsets$trial, bin = seq(0, 1800, by = 100)) |>
   left_join(onsets, by = "trial") |>
@@ -362,10 +458,40 @@ before and after it?
 
 ## Workflow
 
-| | Script | Does |
-|---|---|---|
-| Python | `commas_preprocessing.py` | **pymovements**: read the ASC files, label trials, fixation positions, regions, remove short fixations and blink trials, reading measures (FFD, GD, go-past, TVT) → CSV |
-| R | `commas_statistics.R` | means, mixed models (**lme4**), comparison with the paper |
+::: {.pipeline}
+::: {.stage}
+**1 Read** ASC, message pattern labels trials
+:::
+::: {.stage}
+**2 Trial times** `DISPLAY ON` → button
+:::
+::: {.stage}
+**3 Regions** from the count file
+:::
+::: {.stage}
+**4 Fixations → regions** `map_to_aois`
+:::
+::: {.arrow}
+→
+:::
+::: {.stage}
+**5 Reading window** fixations while reading
+:::
+::: {.stage}
+**6 Cleaning** short fixations, blinks
+:::
+::: {.stage}
+**7 Measures** FFD, GD, go-past, TVT
+:::
+::: {.arrow}
+→
+:::
+::: {.stage .r}
+**8 Statistics** means, lme4, paper
+:::
+:::
+
+Steps 1–7: `commas_preprocessing.py` (**pymovements**) → `measures.csv`. Step 8: `commas_statistics.R` (**R**).
 
 ```bash
 cd workshop
@@ -378,12 +504,16 @@ The next slides run the same code step by step, first for one participant.
 #| echo: false
 ```
 
-## Step 1: read a recording {.smaller}
+## Step 1: read a recording
+
+::: {.step-strip data-step="1"}
+:::
 
 ```{python prep-load}
 ```
 
 ```{python}
+#| output-location: slide
 gaze = load_participant(ASC_DIR / "C1L1.asc")
 gaze.events.frame.group_by("name").len()
 ```
@@ -395,62 +525,102 @@ fixations with a negative x (gaze just left of the screen).
 
 ## What EyeTrack writes into the file
 
+::: {.step-strip data-step="1"}
+:::
+
 ```{python}
+#| output-location: slide
 msgs = gaze.messages.with_columns(pl.col("time").cast(pl.Int64))
 start = msgs.filter(pl.col("content") == "TRIALID E1I39D0")["time"][0]
-trial39 = msgs.filter(pl.col("time").is_between(start, start + 20000) & ~pl.col("content").str.starts_with("DELAY"))
+trial39 = msgs.filter(pl.col("time").is_between(start, start + 20000)
+                      & ~pl.col("content").str.starts_with("DELAY"))
 pl.concat([trial39.head(4), trial39.filter(~pl.col("content").str.starts_with("REGION")).slice(2, 6)])
 ```
 
 `TRIALID E1I39D0`: **E**xperimental trial, condition **1**, item **39** (`F` = question, `P` = practice).
 `REGION CHAR` gives the position of every character; `DISPLAY ON` and `ENDBUTTON` mark the reading time.
 
-## Step 2: when was the sentence on screen? {.smaller}
+## EyeTrack messages vs. the OpenSesame experiments
+
+| | OpenSesame + PyGaze ([recording workshop](https://github.com/bernhardangele/eye-movement-experiments-with-opensesame)) | UMass EyeTrack (frases-comas) |
+|---|---|---|
+| Trial start | `start_trial N`, `TRIALINFO item=…` | `TRIALID E1I39D0` |
+| Condition, item | loop table, in the OpenSesame CSV | in `TRIALID` (E**1**I**39**) |
+| Sentence on screen | `STIMONSET` | `DISPLAY ON` |
+| End of reading | `TRIALEND`: 100 ms fixation on the corner square | `ENDBUTTON`: button press |
+| Character positions | not logged: monospace font, starts at x = 125 px | `REGION CHAR` for every character |
+| Question answer | OpenSesame CSV (1 = SI, 2 = NO) | `QUESTION_ANSWER`, `ENDBUTTON` |
+
+For an OpenSesame recording only steps 1–3 change (message pattern, message names, regions from the sentence table
+and the character width); steps 4–8 stay the same.
+
+## Step 2: when was the sentence on screen?
+
+::: {.step-strip data-step="2"}
+:::
 
 ```{python prep-trials}
 ```
 
 ```{python}
+#| output-location: slide
 times = trial_times(gaze.messages)
 times.filter(pl.col("trial_id").str.starts_with("E")).sort("display_on").head(4)
 ```
 
-## Step 3: regions (areas of interest) {.smaller}
+## Step 3: regions (areas of interest)
+
+::: {.step-strip data-step="3"}
+:::
 
 ```{python prep-regions}
 ```
 
 ```{python}
+#| output-location: slide
 regions = read_regions()
-regions.filter(pl.col("trial_id") == "E1I39D0")
+regions.filter(pl.col("trial_id") == "E1I39D0").head(5)   # region 6 is the space after the sentence
 ```
 
-## Step 4: fixation positions and regions {.smaller}
+## Step 4: fixation positions and regions
+
+::: {.step-strip data-step="4"}
+:::
 
 ```{python prep-fixations}
 ```
 
 ```{python}
+#| output-location: slide
 fixations = fixations_on_regions(gaze, regions)
-fixations.select("trial_id", "onset", "duration", "location_x", "region").head(4)
+fixations.filter(pl.col("trial_id") == "E1I39D0") \
+    .select("trial_id", "onset", "duration", "location_x", "region").head(5)
 ```
 
 `compute_event_properties` averages the samples of each fixation; `map_to_aois` looks up the region in the
 `TextStimulus` of the fixation's trial.
 
-## Step 5: keep fixations made while reading {.smaller}
+## Step 5: keep fixations made while reading
+
+::: {.step-strip data-step="5"}
+:::
 
 ```{python prep-window}
 ```
 
 ```{python}
+#| output-location: slide
 reading = reading_fixations(fixations, times)
-reading.filter(pl.col("trial_id") == "E1I39D0")
+reading.filter(pl.col("trial_id") == "E1I39D0").head(6)
 ```
 
 ## One trial: item 39 with comma
 
+::: {.step-strip data-step="5"}
+:::
+
 ```{python}
+#| output-location: slide
 #| fig-width: 11
 #| fig-height: 3.4
 import matplotlib.pyplot as plt
@@ -463,34 +633,84 @@ for r in regions.filter(pl.col("trial_id") == "E1I39D0").iter_rows(named=True):
     ax.axvspan(r["x_start"], r["x_end"], color="C1" if r["region"] in (2, 3, 4) else "0.85", alpha=0.3)
     ax.text(r["x_start"] + 4, 0.25, f"R{r['region']}", fontsize=9)
 for c, x in chars.iter_rows():
-    ax.text(int(x) + 8, 0, c, ha="center", va="center", family="monospace", fontsize=10)
+    ax.text(int(x) + 8, 0, c, ha="center", va="center", family="monospace", fontsize=7)
 ax.plot(t["x"], 1 + (t["onset"] - t["onset"].min()) / 1000, "-o", ms=4)
 ax.set_xlim(60, 1300); ax.set_ylim(-0.4, None); ax.set_yticks([]); ax.set_xlabel("x (px)  ·  time runs upwards")
+fig.tight_layout()
 plt.show()
 ```
 
-## Step 6: cleaning {.smaller}
+## Step 6: cleaning
+
+::: {.step-strip data-step="6"}
+:::
 
 ```{python prep-clean}
 ```
 
 ```{python}
+#| output-location: slide
 blinks = load_participant(ASC_DIR / "C1L1.asc").events.frame.filter(pl.col("name") == "blink_eyelink")
 fixations_c1l1 = remove_short_fixations(reading)
 clean = remove_blink_trials(fixations_c1l1, blinks)
-print(fixations_c1l1["trial_id"].n_unique() - clean["trial_id"].n_unique(), "trials of C1L1 excluded because of blinks")
+print(fixations_c1l1["trial_id"].n_unique() - clean["trial_id"].n_unique(), "trial(s) excluded")
 ```
 
-## Step 7: reading measures {.smaller}
+## Step 7: reading measures
+
+::: {.step-strip data-step="7"}
+:::
 
 ```{python prep-measures}
 ```
 
 ```{python}
+#| output-location: slide
 region_measures(clean, regions).filter(pl.col("trial_id") == "E1I39D0")
 ```
 
-## All participants {.smaller}
+## Watching a reader: item 36 without comma
+
+::: {.step-strip data-step="7"}
+:::
+
+```{python}
+#| echo: false
+#| output: asis
+import html, json
+from pymovements.measure.reading import annotate_fixations
+
+def scanpath_data(trial_id):
+    """Characters, regions and fixations (with pymovements' first-pass flag) of one trial of C1L1."""
+    chars = (
+        msgs.with_columns(tid=pl.col("content").str.extract(r"^TRIALID (\S+)").forward_fill())
+        .filter((pl.col("tid") == trial_id) & pl.col("content").str.starts_with("REGION CHAR"))["content"]
+        .str.extract_groups(r"REGION CHAR (?P<i>\d+) \d+ (?P<c>.) (?P<x>\d+)").struct.unnest()
+        .unique("i", keep="first", maintain_order=True).select("c", pl.col("x").cast(pl.Int64))
+    )
+    labels = {1: "R1 start", 2: "R2 pre-comma", 3: "R3 post-comma 1", 4: "R4 post-comma 2", 5: "R5 end", 6: "R6"}
+    regs = regions.filter((pl.col("trial_id") == trial_id) & (pl.col("region") <= 5)).with_columns(
+        label=pl.col("region").replace_strict(labels), critical=pl.col("region").is_in([2, 3, 4]))
+    fix = annotate_fixations(
+        remove_short_fixations(reading.filter(pl.col("trial_id") == trial_id)).with_columns(name=pl.lit("fixation")),
+        word_idx="region",
+    ).sort("onset").with_columns(label=pl.col("region").replace_strict(labels, default="no region"))
+    return dict(chars=chars.to_dicts(),
+                regions=regs.select("region", "x_start", "x_end", "label", "critical").to_dicts(),
+                fixations=fix.select("x", "duration", "region", "label", first_pass="is_first_pass").to_dicts())
+
+data = html.escape(json.dumps(scanpath_data("E2I36D0")), quote=True)
+print(f'<div class="scanpath-anim" data-trial="{data}"><div class="controls"><button class="replay">▶ replay</button>'
+      f'<button class="slow">▶ slow motion</button> blue = first pass, orange = rereading</div></div>')
+```
+
+The reader goes back from the pre-comma region (R2) to R1 before reading on: gaze duration of R2 ends there,
+go-past time of R2 includes the regression, and the later fixations on R2 count for total time only.
+
+## All participants
+
+::: {.step-strip data-step="7"}
+:::
 
 ```{python prep-participant}
 ```
@@ -504,7 +724,10 @@ if (!file.exists("data/frases-comas/derived/simple/measures.csv"))
   system2(Sys.getenv("RETICULATE_PYTHON", "python3"), "commas_preprocessing.py")
 ```
 
-## Statistics: data {.smaller}
+## Statistics: data
+
+::: {.step-strip data-step="8"}
+:::
 
 ```{r stats-read}
 ```
@@ -514,18 +737,30 @@ if (!file.exists("data/frases-comas/derived/simple/measures.csv"))
 
 The paper reports 95.6 % (89.2–100 %).
 
+## Statistics: sentence time and cut-offs
+
+::: {.step-strip data-step="8"}
+:::
+
 ```{r stats-data}
 ```
 
-## Means (SE) {.smaller}
+## Means (SE)
+
+::: {.step-strip data-step="8"}
+:::
 
 ```{r stats-tables}
+#| output-location: slide
 ```
 
 Paper: sentence reading time 2523 / 2545 ms; pre-comma go-past 344 / 312; post-comma 1 go-past 397 / 425;
 post-comma 2 go-past 333 / 358 (comma present / omitted).
 
-## Mixed models {.smaller}
+## Mixed models
+
+::: {.step-strip data-step="8"}
+:::
 
 ```{r stats-models}
 ```
@@ -538,7 +773,7 @@ brm(bf(time ~ comma + (comma | subject) + (comma | item), beta ~ comma + (comma 
     family = exgaussian(), data = d, prior = set_prior("normal(0, 100)", class = "b"))
 ```
 
-## Comma effects: this analysis vs. the paper {.smaller}
+## Comma effects: this analysis vs. the paper
 
 ```{r stats-plot}
 #| echo: false

@@ -1,0 +1,50 @@
+/*-- scss:defaults --*/
+$presentation-font-size-root: 30px;
+$presentation-h2-font-size: 1.5em;
+$code-block-font-size: 0.6em;
+$presentation-heading-color: #2b3e50;
+
+/*-- scss:rules --*/
+.reveal .slides section h2 { margin-bottom: 0.4em; }
+
+// data frames and tables printed by Python and R
+.reveal .cell-output-display table,
+.reveal .cell-output-display .dataframe { font-size: 0.7em; }
+.reveal .cell-output-display table td,
+.reveal .cell-output-display table th { padding: 0.15em 0.5em; }
+// show code blocks in full (Quarto scrolls them after 500px); tools/check_slides.py reports what does not fit
+.reveal div.sourceCode pre code, .reveal pre code { max-height: none; }
+.reveal .slides section .cell-output-display small { font-size: 0.7em; }
+
+// figures fill the width they are given
+.reveal .cell-output-display img { max-width: 100%; }
+
+// analysis pipeline (animated with GSAP, see animations.js)
+.pipeline {
+  display: flex; flex-wrap: wrap; align-items: stretch; gap: 0.3em; margin: 0.6em 0; font-size: 0.7em;
+  .stage {
+    flex: 1 1 0; min-width: 6.5em; padding: 0.4em 0.5em; border-radius: 0.4em; background: #eef3f8;
+    border-top: 0.25em solid #2b6cb0; line-height: 1.25;
+    b { display: block; color: #2b3e50; }
+    code { font-size: 0.85em; }
+    &.r { border-top-color: #276749; background: #eef8f1; }
+  }
+  .arrow { align-self: center; color: #718096; font-size: 1.3em; }
+}
+
+// the current step of the frases-comas analysis, below the title of each step slide
+.step-strip {
+  display: flex; gap: 0.25em; font-size: 0.5em; margin: -0.6em 0 0.5em;
+  span { flex: 1; text-align: center; padding: 0.25em 0.2em; border-radius: 0.3em; background: #edf2f7; color: #718096; }
+  span.done { background: #c3dafe; color: #2b3e50; }
+  span.current { background: #2b6cb0; color: white; font-weight: bold; }
+}
+
+// animated scanpath
+.scanpath-anim {
+  svg { width: 100%; height: auto; display: block; }
+  .controls { font-size: 0.55em; color: #4a5568; }
+  button { font-size: 1em; margin-right: 0.5em; cursor: pointer; }
+  table { font-size: 0.75em; margin: 0.4em auto 0; border-collapse: collapse; }
+  td, th { padding: 0.1em 0.8em; text-align: right; }
+}

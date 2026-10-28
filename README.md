@@ -3,6 +3,11 @@ Workshop and example scripts for analyzing eye movement experiments (reading and
 [pymovements](https://github.com/pymovements/pymovements) (preprocessing and reading measures) and R
 (statistics).
 
+It follows the [OpenSesame and PyGaze workshop](https://github.com/bernhardangele/eye-movement-experiments-with-opensesame), in which the experiments
+(reading, boundary, moving window, visual world) are built and recorded; this workshop analyses the recorded data.
+Part 2 analyses a published comma experiment that was recorded with the UMass EyeTrack software instead of
+OpenSesame, so its messages differ (`TRIALID`/`DISPLAY ON`/`ENDBUTTON` instead of `TRIALINFO`/`STIMONSET`/`TRIALEND`).
+
 - `workshop/presentation.qmd`: Quarto (R + Python) presentation, computed from the real EyeLink example recording
   `workshop/data/sub_1_example.asc` (copied from [fixated](https://github.com/bernhardangele/fixated))
 - `Dockerfile` / `docker-compose.yml`: environment with R, RStudio, Quarto and pymovements, based on

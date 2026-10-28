@@ -58,6 +58,7 @@ def load_participant(asc_file):
 def trial_times(messages):
     """Start (DISPLAY ON) and end (ENDBUTTON: the reader pressed the button) of each trial; for the
     comprehension questions also the answer and the correct answer."""
+    first_time = lambda condition: pl.col("time").filter(condition).first().cast(pl.Int64)
     first_number = lambda prefix: (pl.col("content").filter(pl.col("content").str.starts_with(prefix)).first()
                                    .str.extract(r"(\d+)").cast(pl.Int64))
     return (
@@ -65,8 +66,8 @@ def trial_times(messages):
         .with_columns(trial_id=pl.col("content").str.extract(r"^TRIALID (\S+)").forward_fill())
         .group_by("trial_id")
         .agg(
-            display_on=pl.col("time").filter(pl.col("content") == "DISPLAY ON").first().cast(pl.Int64),
-            display_off=pl.col("time").filter(pl.col("content").str.starts_with("ENDBUTTON")).first().cast(pl.Int64),
+            display_on=first_time(pl.col("content") == "DISPLAY ON"),
+            display_off=first_time(pl.col("content").str.starts_with("ENDBUTTON")),
             button=first_number("ENDBUTTON"),
             correct_button=first_number("QUESTION_ANSWER"),
         )
@@ -74,7 +75,7 @@ def trial_times(messages):
 
 
 ## ---- prep-regions
-# Sentence layout (from the REGION CHAR messages): monospaced font, 16 px per character, first character at x = 93
+# Sentence layout (REGION CHAR messages): monospaced, 16 px per character, first character at x = 93
 FIRST_CHAR_X, CHAR_WIDTH = 93, 16
 
 
@@ -156,7 +157,7 @@ def region_measures(fixations, regions):
     fixated (in first pass); we turn these into missing values."""
     aois = (
         regions.join(fixations.select("trial_id").unique(), on="trial_id")
-        .with_columns(word=pl.col("region").cast(pl.String))   # a text column is required; the region number will do
+        .with_columns(word=pl.col("region").cast(pl.String))   # a text column is required
     )
     measures = compute_reading_measures(
         fixations.sort("onset"), aois, word_index_column="region", group_columns=["trial_id"],
