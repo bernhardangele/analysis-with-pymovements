@@ -17,39 +17,50 @@ accuracy <- questions |>
   filter(!is.na(button)) |>   # a few questions have no recorded answer
   group_by(subject) |>
   summarise(correct = 100 * mean(button == correct_button))
+# Standard practice: pre-specify a minimum accuracy threshold (e.g. >= 80%); all 30 here are >= 89.2%.
 cat(sprintf("Accuracy: M = %.1f%%, range %.1f-%.1f%%\n",
             mean(accuracy$correct), min(accuracy$correct), max(accuracy$correct)))
 
 ## ---- stats-data
-# sentence reading time = all fixation time on the sentence
-sentence <- measures |>
+# sentence reading time = summed region TVT (on-text fixation time only, not DISPLAY ON -> ENDBUTTON)
+sentence_all <- measures |>
   group_by(subject, item, comma) |>
-  summarise(time = sum(tvt, na.rm = TRUE), .groups = "drop") |>
-  filter(time < 8000)
+  summarise(time = sum(tvt, na.rm = TRUE), .groups = "drop")
+sentence <- sentence_all |> filter(time < 8000)
 
-# local measures on the three critical regions, without implausible values (same cut-offs as the paper)
+# Upper cut-offs (tuned for skilled L1 readers; check counts per condition, and adjust for L2 readers)
 cutoff <- c(ffd = 800, gd = 1500, gpt = 1800, tvt = 1800)
-local <- measures |>
+local_all <- measures |>
   filter(region %in% 2:4) |>
   mutate(region = factor(region, 2:4, c("pre-comma", "post-comma 1", "post-comma 2"))) |>
   pivot_longer(c(ffd, gd, gpt, tvt), names_to = "measure", values_to = "time") |>
-  filter(!is.na(time), time > 80, time < cutoff[measure])
+  filter(!is.na(time))
+local <- local_all |> filter(time < cutoff[measure])
+local_all |> filter(time >= cutoff[measure]) |> count(comma, measure) |>
+  pivot_wider(names_from = comma, values_from = n, values_fill = 0) |> print()
 
 ## ---- stats-tables
+# Aggregate by participant first so SE reflects between-participant variance, not trial-level N
 mean_se <- \(x) sprintf("%.0f (%.1f)", mean(x), sd(x) / sqrt(length(x)))
 
-sentence |> group_by(comma) |> summarise(`sentence reading time` = mean_se(time)) |> print()
+sentence |> group_by(subject, comma) |> summarise(time = mean(time), .groups = "drop") |>
+  group_by(comma) |> summarise(`sentence reading time` = mean_se(time)) |> print()
 local |>
+  group_by(subject, region, comma, measure) |> summarise(time = mean(time), .groups = "drop") |>
   group_by(region, comma, measure) |>
   summarise(m = mean_se(time), .groups = "drop") |>
   pivot_wider(names_from = measure, values_from = m) |>
   print()
 
 ## ---- stats-models
-# comma present = -0.5, omitted = +0.5: the estimate is the difference "omitted - present" in ms
+# Primary hypothesis: go-past & total time on pre-comma and post-comma 1 (all 13 models shown for comparison).
+# comma present = -0.5, omitted = +0.5: the estimate is the difference "omitted - present" in ms.
+# Raw ms keeps the same scale as the paper's brms ex-Gaussian mu; see stats-scale for log(time) sensitivity.
+# Random intercepts only here for demonstration: maximal slopes `(1 + comma | subject) + (1 + comma | item)`
+# produce singular fits / convergence warnings in lme4; the paper used Bayesian models (brms) instead.
 comma_effect <- function(d) {
   contrasts(d$comma) <- c(-0.5, 0.5)
-  model <- lmer(time ~ comma + (1 + comma | subject) + (1 + comma | item), data = d)
+  model <- lmer(time ~ comma + (1 | subject) + (1 | item), data = d)
   ci <- confint(model, parm = "comma1", method = "Wald")
   tibble(estimate = fixef(model)[["comma1"]], lower = ci[1], upper = ci[2])
 }
@@ -57,6 +68,28 @@ effects <- bind_rows(
   sentence |> comma_effect() |> mutate(region = "sentence", measure = "reading time"),
   local |> group_by(region, measure) |> group_modify(\(d, g) comma_effect(d)) |> ungroup()
 )
+
+## ---- stats-skipping
+# First-pass skipping (fpf == 0) on the pre-comma region: durations are conditional on fixation
+skip_pre <- measures |> filter(region == 2) |> mutate(skipped = as.integer(fpf == 0))
+contrasts(skip_pre$comma) <- c(-0.5, 0.5)
+skip_pre |> group_by(comma) |> summarise(skip_pct = round(100 * mean(skipped), 1)) |> print()
+m_skip <- glmer(skipped ~ comma + (1 | subject) + (1 | item), data = skip_pre, family = binomial)
+round(summary(m_skip)$coefficients, 3) |> print()
+
+## ---- stats-scale
+# Reading times are right-skewed (Part 1 models log(gd)). Compare t-statistics on raw ms vs. log(time):
+scale_t <- function(d) {
+  contrasts(d$comma) <- c(-0.5, 0.5)
+  t_raw <- summary(lmer(time ~ comma + (1 | subject) + (1 | item), data = d))$coefficients["comma1", "t value"]
+  t_log <- summary(lmer(log(time) ~ comma + (1 | subject) + (1 | item), data = d))$coefficients["comma1", "t value"]
+  sprintf("%.2f / %.2f", t_raw, t_log)
+}
+local |>
+  group_by(region, measure) |>
+  summarise(t_raw_log = scale_t(pick(everything())), .groups = "drop") |>
+  pivot_wider(names_from = measure, values_from = t_raw_log) |>
+  print()
 
 ## ---- stats-plot
 # estimates of the paper: mu of a Bayesian ex-Gaussian model (brms), 95% credible interval

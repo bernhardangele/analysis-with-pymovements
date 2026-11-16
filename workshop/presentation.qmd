@@ -18,8 +18,10 @@ library(tidyverse)
 use_python(Sys.getenv("RETICULATE_PYTHON", unset = Sys.which("python3")), required = TRUE)
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
                       fig.width = 11, fig.height = 5, dpi = 150, out.width = "100%")
-# code of the Part 2 slides comes from the analysis scripts ("## ---- name" sections)
-for (f in c("commas_preprocessing.py", "commas_statistics.R")) knitr::read_chunk(f)
+# code of the Part 2 & 3 slides comes from the analysis scripts ("## ---- name" sections)
+for (f in c("commas_preprocessing.py", "commas_statistics.R", "vwp_analysis.py")) {
+  knitr::read_chunk(f)
+}
 ```
 
 ## Where this workshop fits
@@ -45,10 +47,11 @@ for (f in c("commas_preprocessing.py", "commas_statistics.R")) knitr::read_chunk
 - The [recording workshop](https://github.com/bernhardangele/eye-movement-experiments-with-opensesame) builds the experiments; every trial has the same skeleton: drift correction →
   gaze target at the sentence start → sentence (`STIMONSET`) → fixate the corner square (`TRIALEND`) →
   comprehension question.
-- Here we analyse what such experiments record: one EyeLink recording (Part 1), then a complete published
-  experiment (Part 2), which was recorded with the UMass EyeTrack software instead of OpenSesame.
+- **Part 1** walks step-by-step through a simulated `reading.osexp` recording (`subject-1.asc` +
+  `reading-subject-1.csv`; standalone script in `opensesame_preprocessing.py`). **Part 2** analyses a complete
+  published experiment (`frases-comas`, UMass EyeTrack); **Part 3** covers visual world (`vwp.osexp`).
 
-## Workflow
+## Workflow: single recording (Part 1)
 
 ::: {.pipeline}
 ::: {.stage}
@@ -88,66 +91,111 @@ for (f in c("commas_preprocessing.py", "commas_statistics.R")) knitr::read_chunk
 
 Everything up to the reading measures is done in Python with **pymovements**; R does plots and statistics.
 
-All results are computed from a **real binocular EyeLink recording**
-(`data/sub_1_example.asc`, Spanish sentence reading, 1000 Hz, 4 trials), the example file shipped with the R package `fixated`.
+All Part 1 results are computed from a **simulated `reading.osexp` recording**
+(`data/opensesame_example/subject-1.asc` + `reading-subject-1.csv`, 1000 Hz, 6 trials including 1 aborted trial),
+matching the companion OpenSesame workshop.
+
+## Reading `polars` (for R users)
+
+pymovements uses **polars** DataFrames; `py$name` passes any Python table to R (`tidyverse` / `lme4`):
+
+| Task | R (`dplyr`) | Python (`polars`) |
+|---|---|---|
+| Filter rows | `filter(cond)` | `.filter(pl.col("a") > 0)` |
+| New / edited column | `mutate(b = ...)` | `.with_columns(b=...)` |
+| Group mutate | `group_by(t) \|> mutate(...)` | `.with_columns((...).over("t"))` |
+| Summarise | `group_by(t) \|> summarise(...)` | `.group_by("t").agg(...)` |
+| Time-window join | join + `filter(t >= s, t <= e)` | `.join_where(d, pl.col("t") >= pl.col("s"), ...)` |
+| Regex columns | `tidyr::extract(...)` | `.str.extract_groups(pat).unnest("d")` |
 
 ## Reading the ASC file
+
+Load samples and `MSG` timestamps (`pixel = [x, y]` here; binocular recordings store `[x_L, y_L, x_R, y_R]`):
 
 ```{python}
 import numpy as np
 import polars as pl
 import pymovements as pm
 
-gaze_raw = pm.gaze.from_asc("data/sub_1_example.asc", messages=True)
+gaze_raw = pm.gaze.from_asc(
+    "data/opensesame_example/subject-1.asc",
+    patterns=[r"TRIALINFO item=(?P<trial>\d+)"],
+    messages=True,
+)
 messages = gaze_raw.messages.with_columns(pl.col("time").cast(pl.Int64))
 gaze_raw.samples.head(3)
 ```
 
-Samples are binocular: `pixel` holds `[x_left, y_left, x_right, y_right]`.
+## Raw lines in `subject-1.asc`
 
-## Trials from the messages
+Here is what our regular expressions match inside the plain-text EyeLink ASC file (one sample row and four
+`MSG` rows):
+
+```text
+101000	  125.0	  540.0	  850.0	...
+MSG	101005 TRIALINFO item=901
+MSG	101260 STIMONSET
+MSG	101261 REGION n=1 label=Hemos left=128 top=514 right=212 bottom=566
+MSG	101261 REGION n=2 label=de left=212 top=514 right=254 bottom=566
+```
+
+Each `MSG` gives a millisecond timestamp and a tag written by OpenSesame (`TRIALINFO`, `STIMONSET`, `REGION`,
+`TRIALEND`, or `TRIAL ABORTED`).
+
+## Trials from the messages (and aborted trials)
+
+Label every message with its `TRIALINFO` item number, keep `[STIMONSET, TRIALEND]` per trial, and drop
+aborted or timed-out trials:
 
 ```{python}
-trials = (
-    messages.filter(pl.col("content").str.contains(r"^start_trial|^DISPLAY (ON|OFF)"))
-    .with_columns(
-        pl.col("content").str.extract(r"^start_trial (\d+)", 1).cast(pl.Int64).forward_fill().alias("trial")
-    )
-    .filter(pl.col("content").str.starts_with("DISPLAY"))
-    .group_by("trial", maintain_order=True)
-    .agg(
-        pl.col("time").filter(pl.col("content") == "DISPLAY ON").first().alias("display_on"),
-        pl.col("time").filter(pl.col("content") == "DISPLAY OFF").first().alias("display_off"),
-    )
+#| output-location: slide
+msgs = messages.with_columns(
+    trial=pl.col("content").str.extract(r"^TRIALINFO item=(\d+)", 1).cast(pl.Int64).forward_fill()
+).filter(pl.col("trial").is_not_null())
+
+trials = msgs.group_by("trial", maintain_order=True).agg(
+    display_on=pl.col("time").filter(pl.col("content") == "STIMONSET").last(),
+    display_off=pl.col("time").filter(pl.col("content") == "TRIALEND").last(),
+    aborted=pl.col("content").str.contains(r"^(TRIAL ABORTED|CORNER TIMEOUT|BOUNDARY TIMEOUT)").any(),
 )
+print(f"Aborted/timed-out trials dropped: {trials.filter(pl.col('aborted')).height}")
+trials = trials.filter(~pl.col("aborted") & pl.col("display_on").is_not_null())
 trials
 ```
 
-## Word boundaries from the messages
+## Word boundaries from `REGION` messages and CSV
+
+Split each CSV sentence into numbered words and match them on `(trial, word_id)` against the `REGION` pixel
+boxes (which restores accented characters and adds `condition`):
 
 ```{python}
-words = (
-    messages.filter(pl.col("content").str.contains(r"^TRIAL \d+ ITEM"))
-    .with_columns(
-        pl.col("content").str.extract_groups(
-            r"^TRIAL (?P<trial>\d+) ITEM (?P<item>\d+) WORD (?P<word_id>\d+) (?P<word>\S+)"
-            r" RIGHT_BOUNDARY (?P<x_end>\d+)"
-        ).alias("d")
-    )
-    .unnest("d")
-    .with_columns(pl.col(c).cast(pl.Int64) for c in ["trial", "item", "word_id", "x_end"])
-    .drop("time", "content")
-    .sort("trial", "word_id")
-    # the left edge of a word is the right boundary of the previous one
-    .with_columns(pl.col("x_end").shift(1).over("trial").fill_null(0).alias("x_start"))
+#| output-location: slide
+csv_words = (
+    pl.read_csv("data/opensesame_example/reading-subject-1.csv")
+    .filter(pl.col("trial_aborted") == 0)
+    .select(trial="item", condition="condition", word=pl.col("sentence").str.split(" "))
+    .explode("word")
+    .with_columns(word_id=pl.cum_count("word").over("trial"))
 )
-words.head(4)
+pattern = (
+    r"^REGION n=(?P<word_id>\d+) label=\S+ left=(?P<x_start>-?\d+) top=(?P<y_start>-?\d+) "
+    r"right=(?P<x_end>-?\d+) bottom=(?P<y_end>-?\d+)"
+)
+words = (
+    msgs.join(trials.select("trial"), on="trial")
+    .with_columns(pl.col("content").str.extract_groups(pattern).alias("d"))
+    .filter(pl.col("d").is_not_null()).unnest("d")
+    .with_columns(pl.col("word_id", "x_start", "y_start", "x_end", "y_end").cast(pl.Int64))
+    .drop("time", "content")
+    .join(csv_words, on=["trial", "word_id"])
+)
+words.filter(pl.col("trial") == 1).head(4)
 ```
 
 ## Preprocessing with pymovements
 
-Only left-eye samples between `DISPLAY ON` and `DISPLAY OFF` are used.
-The screen geometry (53 x 29.8 cm at 60 cm) gives ~40 px/deg, matching the resolution reported by the EyeLink.
+Unpack the `[x, y]` sample coordinates, attach trial numbers with a `[STIMONSET, TRIALEND]` range join, convert
+pixels to degrees, and compute smoothed gaze velocity (check `px/deg` against the EyeLink `RES` line):
 
 ```{python}
 #| output-location: slide
@@ -162,8 +210,10 @@ samples = (
 experiment = pm.Experiment(
     screen_width_px=1920, screen_height_px=1080,
     screen_width_cm=53, screen_height_cm=29.8,
-    distance_cm=60, sampling_rate=1000,
+    distance_cm=70, sampling_rate=1000,
 )
+px_per_deg = 1920 / (2 * np.degrees(np.arctan(53 / (2 * 70))))
+print(f"Computed resolution: {px_per_deg:.2f} px/deg (EyeLink header RES: 46.20, 46.20)")
 gaze = pm.Gaze(
     samples=samples, experiment=experiment,
     time_column="time", time_unit="ms",
@@ -182,17 +232,23 @@ gaze.samples.head(3)
 
 ## I-DT with pymovements
 
+Detect dispersion-based fixations (`dispersion_threshold=1.0` deg ≈ 46 px ≈ 2–3 characters, `minimum_duration=80` ms) and attach mean sample pixel coordinates per fixation:
+
 ```{python}
+#| output-location: slide
 def with_location(fix, samples):
-    """Mean pixel position of the samples within each fixation."""
+    """Mean pixel position of samples in each fixation, dropping any that contain missing (blink) samples."""
     mean_pos = (
         fix.join_where(samples, pl.col("time") >= pl.col("onset"), pl.col("time") <= pl.col("offset"),
                        suffix="_s")
         .filter(pl.col("trial") == pl.col("trial_s"))
         .group_by("trial", "onset", "offset", "duration", maintain_order=True)
-        .agg(pl.col("x_pix").mean().alias("avg_x"), pl.col("y_pix").mean().alias("avg_y"))
+        .agg(pl.col("x_pix").mean().alias("avg_x"), pl.col("y_pix").mean().alias("avg_y"),
+             pl.col("x_pix").is_null().sum().alias("n_missing"))
+        .filter(pl.col("n_missing") == 0)
+        .drop("n_missing")
     )
-    return mean_pos.rename({"onset": "start_time", "offset": "end_time"})
+    return mean_pos.rename({"onset": "start_time", "offset": "end_time"}).sort("trial", "start_time")
 
 # I-DT
 gaze.detect("idt", dispersion_threshold=1.0, minimum_duration=80, name="fixation")
@@ -205,75 +261,143 @@ fix_idt.head(3)
 
 ## Engbert & Kliegl with pymovements
 
+Detect saccades per trial (`threshold_factor=6` median SDs after `window_length=7` ms smoothing;
+`minimum_duration=6` ms), fill gaps (`>= 40 ms`), and compute positions (`fixations = fix_ek` selects EK below):
+
 ```{python}
-# Engbert & Kliegl (2003; Engbert & Mergenthaler 2006 threshold): detect saccades per trial, then fill the gaps
+#| output-location: slide
+# Engbert & Kliegl (2003; Engbert & Mergenthaler 2006): detect saccades per trial, then fill the gaps
 ek = []
 for (trial,), sub in gaze.samples.group_by("trial", maintain_order=True):
-    sacc = pm.events.microsaccades(sub["velocity"], timesteps=sub["time"], minimum_duration=6, threshold_factor=6)
+    sacc = pm.events.microsaccades(
+        sub["velocity"], timesteps=sub["time"], minimum_duration=6, threshold_factor=6,
+    )
     fix = pm.events.fill(sacc, timesteps=sub["time"], minimum_duration=40, name="fixation")
     ek.append(fix.frame.with_columns(pl.lit(trial).cast(pl.Int64).alias("trial")))
 fix_ek = with_location(pl.concat(ek).select("trial", "onset", "offset", "duration"), samples)
 
-fixations = fix_ek  # used for the reading measures below
+fixations = fix_ek
 fix_ek.head(3)
 ```
 
+On real data with blinks, use `with_location` to drop missing-sample intervals or prefer EyeLink's own events.
+
 ## Comparing the algorithms with EyeLink
+
+Clip EyeLink fixations to `[display_on, display_off]` so counts and durations cover the same window:
 
 ```{python}
 #| output-location: slide
-el = pm.gaze.from_asc("data/sub_1_example.asc", events=True).events.frame
+el = pm.gaze.from_asc("data/opensesame_example/subject-1.asc", events=True).events.frame
 fix_el = (
-    el.filter((pl.col("name") == "fixation_eyelink") & (pl.col("eye") == "left"))
-    .join_where(trials, pl.col("onset") >= pl.col("display_on"), pl.col("onset") <= pl.col("display_off"))
-    .select("trial", "duration")
+    el.filter((pl.col("name") == "fixation_eyelink") & (pl.col("eye") == "right"))
+    .join_where(trials, pl.col("offset") > pl.col("display_on"), pl.col("onset") < pl.col("display_off"))
+    .with_columns(
+        start_time=pl.max_horizontal("onset", "display_on"),
+        end_time=pl.min_horizontal("offset", "display_off"),
+    )
+    .with_columns(duration=pl.col("end_time") - pl.col("start_time"))
+    .select("trial", "start_time", "end_time", "duration")
 )
-pl.concat([
-    fix_idt.select("trial", "duration").with_columns(pl.lit("pymovements I-DT").alias("source")),
-    fix_ek.select("trial", "duration").with_columns(pl.lit("pymovements Engbert & Kliegl").alias("source")),
-    fix_el.with_columns(pl.lit("EyeLink (left eye)").alias("source")),
+counts = pl.concat([
+    fix_idt.select("trial", "duration").with_columns(source=pl.lit("pymovements I-DT")),
+    fix_ek.select("trial", "duration").with_columns(source=pl.lit("pymovements Engbert & Kliegl")),
+    fix_el.select("trial", "duration").with_columns(source=pl.lit("EyeLink (right eye)")),
 ]).group_by("source").agg(
     pl.len().alias("n"),
     pl.col("duration").mean().round(1).alias("mean_ms"),
     pl.col("duration").median().alias("median_ms"),
 ).sort("source")
+print(counts)
 ```
 
-## Why do they differ?
+## Matching fixations against EyeLink
 
-- The EyeLink parser is also velocity/acceleration based (30 deg/s, 8000 deg/s^2 defaults) with *fixed* thresholds, so it
-  behaves like Engbert & Kliegl; the adaptive EK threshold adjusts to noise in each trial.
-- I-DT ignores velocity: slow drifts or glissades after a saccade stay inside the dispersion window and are merged
-  into the fixation, while small saccades between nearby fixations can be missed. Its minimum duration (80 ms) also removes many short fixations.
-- Differences in fixation counts and durations propagate into word-level measures (see below).
+Compare onset and duration differences on overlapping fixation pairs per trial:
 
-## Scanpath of trial 0 (shifted by 25 px for visibility)
+```{python}
+#| output-location: slide
+def match_el(fix, name):
+    return (
+        fix.join_where(
+            fix_el, pl.col("start_time") <= pl.col("end_time_el"),
+            pl.col("end_time") >= pl.col("start_time_el"), suffix="_el",
+        )
+        .filter(pl.col("trial") == pl.col("trial_el"))
+        .with_columns(
+            ov=pl.min_horizontal("end_time", "end_time_el")
+            - pl.max_horizontal("start_time", "start_time_el")
+        )
+        .sort("ov", descending=True).unique(subset=["trial", "start_time"], keep="first")
+        .select(
+            source=pl.lit(name), n_matched=pl.len(),
+            med_onset_diff=(pl.col("start_time") - pl.col("start_time_el")).abs().median(),
+            med_dur_diff=(pl.col("duration") - pl.col("duration_el")).abs().median(),
+        )
+    )
+
+print(pl.concat([match_el(fix_idt, "I-DT vs EyeLink"), match_el(fix_ek, "EK vs EyeLink")]))
+```
+
+## Which detector should you use?
+
+- **Why they differ**: Engbert & Kliegl adapts velocity thresholds per trial and tracks EyeLink down to `40` ms
+  (capturing the `55` ms corrective fixation in item 1); I-DT drops `< 80` ms fixations and can merge slow
+  post-saccadic drifts into adjacent fixations.
+- **High-rate reading (>= 500 Hz, e.g., EyeLink)**: use **EyeLink events** (`fixation_eyelink`, as in Part 2)
+  for blink safety, or **Engbert & Kliegl** (`fix_ek`, selected here) for reproducible cross-tracker code.
+- **Lower rates (< 250 Hz, webcams, visual world)**: use **I-DT**, where multi-sample velocity differentiation
+  breaks down; compare both as a sensitivity check.
+
+## Scanpath of item 2 (I-DT shifted by 25 px vertically)
 
 ```{python}
 #| output-location: slide
 import matplotlib.pyplot as plt
 
-t0 = fixations.filter(pl.col("trial") == 0)
-w0 = words.filter(pl.col("trial") == 0)
+t2 = fixations.filter(pl.col("trial") == 2)
+w2 = words.filter(pl.col("trial") == 2)
 fig, ax = plt.subplots(figsize=(10, 3))
-for row in w0.iter_rows(named=True):
+for row in w2.iter_rows(named=True):
     ax.axvspan(row["x_start"], row["x_end"], alpha=0.15 if row["word_id"] % 2 else 0.05, color="k")
-    ax.text((row["x_start"] + row["x_end"]) / 2, 1040, row["word"], ha="center", fontsize=8)
-ax.plot(t0["avg_x"], t0["avg_y"], "-o", color="C0", label="Engbert & Kliegl")
-i0 = fix_idt.filter(pl.col("trial") == 0)
-ax.plot(i0["avg_x"], i0["avg_y"] + 25, "--s", color="C1", alpha=0.7, label="I-DT")
-ax.legend(loc="lower right")
-ax.set_xlim(0, 1100); ax.set_ylim(1080, 500); ax.set_xlabel("x (px)"); ax.set_ylabel("y (px)")
+    ax.text((row["x_start"] + row["x_end"]) / 2, 580, row["word"], ha="center", fontsize=8)
+ax.plot(t2["avg_x"], t2["avg_y"], "-o", color="C0", label="Engbert & Kliegl")
+i2 = fix_idt.filter(pl.col("trial") == 2)
+ax.plot(i2["avg_x"], i2["avg_y"] + 25, "--s", color="C1", alpha=0.7, label="I-DT (shifted)")
+ax.legend(loc="upper right")
+ax.set_xlim(100, 1150); ax.set_ylim(595, 505); ax.set_xlabel("x (px)"); ax.set_ylabel("y (px)")
 fig.tight_layout()
 plt.show()
 ```
 
+## Reading measures: definitions
+
+Worked fixation sequence across words 1–4: `w1 (180)` → `w3 (200)` → `w3 (150)` → `w1 (120)` → `w4 (210)` ms:
+
+- **First pass**: fixations from first entering word *k* until leaving it left or right (`w3`: `200 + 150 = 350` ms).
+- **Skipped / unfixated**: first pass moved past word *k* (`w2`: `FPF = 0`, `Fix = 0` → `NA`, never average `0`!).
+- **First fixation (`ffd`)**: first fixation in first pass (`w3`: `200` ms); **Gaze duration (`gd`)**: sum (`350` ms).
+- **Go-past (`gpt`)**: from entering *k* until moving past its right edge, including regressions (`200+150+120 = 470` ms).
+- **Total viewing time (`tvt`)**: sum of all fixations on word *k*, including later re-reads (`w3`: `350` ms; `w1`: `300` ms).
+
+## Reading measures: naming across tools
+
+| Measure (on word or region *k*) | pymovements column | R / Part 2 name |
+|---|---|---|
+| First fixation duration | `FFD` | `ffd` |
+| Gaze duration (first-pass reading time) | `FPRT` | `gd` |
+| Go-past time (regression-path duration) | `RPD_inc` | `gpt` |
+| Total viewing / fixation time | `TFT` | `tvt` |
+| Fixated in first pass / regressed out | `FPF`, `FPReg` | `fpf`, `fpreg` |
+
 ## Reading measures with pymovements
+
+`words` already carries the `y_start`/`y_end` band from `REGION` messages (`514..566` px), so corner-square
+fixations (`y ~ 1015`) are naturally excluded:
 
 ```{python}
 from pymovements.measure.reading import compute_reading_measures
 
-words = words.with_columns(y_start=pl.lit(0), y_end=pl.lit(1080))   # each word spans the whole screen height
 stimulus = pm.stimulus.TextStimulus(
     words, aoi_column="word_id", trial_column="trial",
     start_x_column="x_start", end_x_column="x_end", start_y_column="y_start", end_y_column="y_end",
@@ -291,7 +415,6 @@ def reading_measures(fix):
     events.map_to_aois(stimulus, verbose=False)
     return compute_reading_measures(events.frame, words.select("trial", "word_id", "word"),
                                     word_index_column="word_id", group_columns=["trial"])
-
 ```
 
 ## The reading measures
@@ -308,18 +431,19 @@ out of the word in first pass; [and more](https://pymovements.readthedocs.io).
 
 ## Handing over to R
 
-pymovements gives 0 for words that were not read (in first pass); in R these become missing values.
+pymovements writes `0` when a word was skipped (`FPF == 0`) or never fixated (`Fix == 0`) — never average raw
+`FPRT` with zeros still in it; convert via those flags so unfixated words become `NA`:
 
 ```{r}
 from_pymovements <- function(m) {
   m |> as_tibble() |>
     transmute(trial = as.integer(trial), word_id = as.integer(word_index), word,
-              ffd = na_if(FFD, 0), gd = na_if(FPRT, 0), gpt = na_if(RPD_inc, 0), tvt = na_if(TFT, 0),
-              first_pass = FPF, regression_out = if_else(FPF == 1, FPReg, NA))
+              ffd = if_else(FPF == 1, FFD, NA_real_), gd = if_else(FPF == 1, FPRT, NA_real_),
+              gpt = if_else(FPF == 1, RPD_inc, NA_real_), tvt = if_else(Fix == 1, TFT, NA_real_),
+              first_pass = FPF, regression_out = if_else(FPF == 1, FPReg, NA_real_))
 }
 measures <- from_pymovements(py$measures)
 
-# fixations and words, for the time-course analysis at the end of Part 1
 fix <- py$fixations |> as_tibble() |> mutate(trial = as.integer(trial))
 roi <- py$words |> as_tibble() |> mutate(across(c(trial, word_id, x_start, x_end), as.integer))
 measures |> head(6)
@@ -349,97 +473,67 @@ measures |>
   mutate(across(where(is.numeric), \(x) round(x, 2)))
 ```
 
-## Statistics: word length and gaze duration
+## Word length and gaze duration
 
-Only four sentences are available, so the model demonstrates the workflow rather than testing a hypothesis.
-
-```{r}
-library(lmerTest)
-d <- measures |>
-  mutate(word_length = str_length(str_remove_all(word, "[[:punct:]]"))) |>
-  filter(!is.na(gd), gd > 0) |>
-  mutate(word_length_c = word_length - mean(word_length))
-
-m <- lmer(log(gd) ~ word_length_c + (1 | trial), data = d)
-round(summary(m)$coefficients, 3)
-```
+With only five sentences from one participant, we plot the data rather than fitting a mixed model (`lmer`
+needs multiple participants and items; mixed modelling starts in **Part 2**). Word 1 (gaze-target fixation at
+onset) and the last word (corner-saccade wrap-up) are excluded:
 
 ```{r}
 #| output-location: slide
+d <- measures |>
+  group_by(trial) |>
+  filter(word_id > 1, word_id < max(word_id), !is.na(gd)) |>
+  ungroup() |>
+  mutate(word_length = str_length(str_remove_all(word, "[[:punct:]]")))
+
 ggplot(d, aes(word_length, gd)) +
   geom_point() + geom_smooth(method = "lm", se = FALSE) +
   labs(x = "Word length (letters)", y = "Gaze duration (ms)")
 ```
 
-## Word frequency effect
+## Word frequency lookup (SUBTLEX-ESP)
 
-Frequencies are Zipf values from **SUBTLEX-ESP** (Cuetos et al., 2011; Spanish subtitles), the Spanish counterpart of SUBTLEX-US.
-The ASC file lost the accents (`Ser?`, `cr?ticas`); these are resolved to the most frequent accented form that fits.
+Frequencies are Zipf values from **SUBTLEX-ESP** (Cuetos et al., 2011; Spanish subtitles). Because we joined
+the accented words from `reading-subject-1.csv`, lookup is exact — no guessing `?` characters from the tracker
+file (in your own study, join word predictors such as cognate status or L2 frequency on `item` + `word_id`):
 
 ```{r}
 #| output-location: slide
 subtlex <- read_tsv(Sys.getenv("SUBTLEX_ESP", "data/SUBTLEX-ESP_form_zipf.txt"),
                     col_names = c("form", "zipf"), col_types = "cd", progress = FALSE)
 
-lookup_zipf <- function(w) {
-  w <- str_to_lower(str_remove_all(w, "[[:punct:]]"))
-  exact <- subtlex$zipf[match(w, subtlex$form)]
-  if (!str_detect(w, fixed("?")) || !is.na(exact)) return(exact)
-  # "?" replaced the accented letter: take the most frequent form with a non-ASCII letter at that position
-  cand <- subtlex |> filter(str_detect(form, paste0("^", str_replace_all(w, fixed("?"), "[^a-z]"), "$")))
-  if (nrow(cand)) max(cand$zipf) else NA_real_
-}
-
 freq <- measures |>
-  mutate(zipf = map_dbl(word, lookup_zipf), word_length = str_length(str_remove_all(word, "[[:punct:]]")))
+  mutate(word_clean = str_to_lower(str_remove_all(word, "[[:punct:]]")),
+         zipf = subtlex$zipf[match(word_clean, subtlex$form)],
+         word_length = str_length(word_clean))
 cat(sum(!is.na(freq$zipf)), "of", nrow(freq), "words found in SUBTLEX-ESP\n")
-freq |> filter(trial == 0) |> select(word, zipf, ffd, gd, tvt) |> head(5)
+freq |> filter(trial == 1) |> select(word, zipf, ffd, gd, tvt) |> head(6)
 ```
 
-## Frequency effect on gaze duration
-
-```{r}
-dz <- freq |>
-  filter(!is.na(gd), gd > 0, !is.na(zipf)) |>
-  mutate(zipf_c = zipf - mean(zipf), word_length_c = word_length - mean(word_length))
-
-m_freq <- lmer(log(gd) ~ zipf_c + word_length_c + (1 | trial), data = dz)
-round(summary(m_freq)$coefficients, 3)
-```
+## Frequency effect: plot and real-study model
 
 ```{r}
 #| output-location: slide
+dz <- freq |>
+  group_by(trial) |>
+  filter(word_id > 1, word_id < max(word_id), !is.na(gd), !is.na(zipf)) |>
+  ungroup() |>
+  mutate(zipf_c = zipf - mean(zipf), word_length_c = word_length - mean(word_length))
+
 ggplot(dz, aes(zipf, gd)) +
   geom_point() + geom_smooth(method = "lm", se = FALSE) +
   labs(x = "Word frequency (Zipf, SUBTLEX-ESP)", y = "Gaze duration (ms)")
 ```
 
-A negative `zipf_c` coefficient means that more frequent words are read faster. With four sentences (one participant) this is only a demonstration.
-
-## Time-course (visual-world style) analysis
-
-There is no visual world recording here, so the same real data demonstrates the time-course workflow:
-for every 100 ms bin after display onset, which area of interest (here: word) is fixated, and the proportion of
-trials looking at each word. In a visual world study the AOIs would be target, competitor and distractors.
+For real multi-participant word-level data, model `log(gd)` (reading times are right-skewed) with random
+effects for subjects, sentences, and words (**Part 2** shows convergence checks on real 30-participant data):
 
 ```{r}
-#| output-location: slide
-onsets <- py$trials |> as_tibble() |> transmute(trial = as.integer(trial), display_on = as.numeric(display_on))
-bins <- crossing(trial = onsets$trial, bin = seq(0, 1800, by = 100)) |>
-  left_join(onsets, by = "trial") |>
-  mutate(t = display_on + bin)
-
-looks <- bins |>
-  inner_join(fix, by = "trial", relationship = "many-to-many") |>
-  filter(t >= start_time, t <= end_time) |>
-  inner_join(roi, by = "trial", relationship = "many-to-many") |>
-  filter(avg_x >= x_start, avg_x < x_end) |>
-  count(bin, word_id)
-
-props <- looks |> mutate(prop = n / n_distinct(bins$trial))
-ggplot(props, aes(bin, prop, colour = factor(word_id))) +
-  geom_line() + geom_point() +
-  labs(x = "Time since display onset (ms)", y = "Proportion of trials fixating", colour = "Word")
+#| eval: false
+library(lmerTest)
+m_freq <- lmer(log(gd) ~ zipf_c + word_length_c + (1 + zipf_c + word_length_c | subject) + (1 | trial) + (1 | word),
+               data = dz_all_subjects)
 ```
 
 # Part 2: Analysing a complete experiment {background-color="#2b3e50"}
@@ -454,9 +548,10 @@ Angele, Gutiérrez-Cordero, Perea & Marcet (`data/frases-comas/manuscript-revisi
 - Regions: 1 sentence start · **2 pre-comma** · **3 post-comma 1** · **4 post-comma 2** · 5 sentence end
 
 *Siempre tiene flores en casa, aun siendo alérgica al polen* — does the comma change how long readers look
-before and after it?
+before and after it? Even on identical data, blink, short-fixation, and trimming choices change the numbers;
+we track every choice below.
 
-## Workflow
+## Workflow: full experiment (Part 2)
 
 ::: {.pipeline}
 ::: {.stage}
@@ -542,17 +637,17 @@ pl.concat([trial39.head(4), trial39.filter(~pl.col("content").str.starts_with("R
 
 ## EyeTrack messages vs. the OpenSesame experiments
 
-| | OpenSesame + PyGaze ([recording workshop](https://github.com/bernhardangele/eye-movement-experiments-with-opensesame)) | UMass EyeTrack (frases-comas) |
+| | OpenSesame + PyGaze | UMass EyeTrack (`frases-comas`) |
 |---|---|---|
-| Trial start | `start_trial N`, `TRIALINFO item=…` | `TRIALID E1I39D0` |
-| Condition, item | loop table, in the OpenSesame CSV | in `TRIALID` (E**1**I**39**) |
+| Trial start | `TRIALINFO item=…` (`TRIALID`) | `TRIALID E1I39D0` |
+| Condition, item | CSV (`reading-subject-N.csv`) | `TRIALID` (`E1I39`) |
 | Sentence on screen | `STIMONSET` | `DISPLAY ON` |
-| End of reading | `TRIALEND`: 100 ms fixation on the corner square | `ENDBUTTON`: button press |
-| Character positions | not logged: monospace font, starts at x = 125 px | `REGION CHAR` for every character |
-| Question answer | OpenSesame CSV (1 = SI, 2 = NO) | `QUESTION_ANSWER`, `ENDBUTTON` |
+| End of reading | `TRIALEND` (corner fixation) | `ENDBUTTON` (button press) |
+| Aborted / timeout | `TRIAL ABORTED`, `CORNER TIMEOUT` | `TRIAL ABORTED` / `TRIAL REPEATED` |
+| Word & letter boxes | `REGION` (`top`/`bottom`), `LETTER` | `REGION CHAR` per char |
+| Question answer | CSV (`response`, `correct`) | `QUESTION_ANSWER`, `ENDBUTTON` |
 
-For an OpenSesame recording only steps 1–3 change (message pattern, message names, regions from the sentence table
-and the character width); steps 4–8 stay the same.
+See the companion [recording workshop](https://github.com/bernhardangele/eye-movement-experiments-with-opensesame) (`opensesame_preprocessing.py`).
 
 ## Step 2: when was the sentence on screen?
 
@@ -568,19 +663,39 @@ times = trial_times(gaze.messages)
 times.filter(pl.col("trial_id").str.starts_with("E")).sort("display_on").head(4)
 ```
 
+## Layout from the ASC file
+
+::: {.step-strip data-step="3"}
+:::
+
+Derive pixel origin, character width, and screen height directly from `REGION CHAR` and `GAZE_COORDS`:
+
+```{python prep-layout}
+```
+
 ## Step 3: regions (areas of interest)
 
 ::: {.step-strip data-step="3"}
 :::
 
+Outer sentence edges are padded by `0.5` char (`8` px) so near-left word-1 fixations still land in region 1:
+
 ```{python prep-regions}
 ```
 
+## Regions of one trial
+
+::: {.step-strip data-step="3"}
+:::
+
 ```{python}
-#| output-location: slide
 regions = read_regions()
 regions.filter(pl.col("trial_id") == "E1I39D0").head(5)   # region 6 is the space after the sentence
 ```
+
+Note: here region 2 is 1 character wider with a comma (mean 9.9 vs. 8.9 chars); in general, control for
+region-length differences across conditions (e.g. a combined comma+space glyph, length covariates, or residual
+reading times).
 
 ## Step 4: fixation positions and regions
 
@@ -645,6 +760,8 @@ plt.show()
 ::: {.step-strip data-step="6"}
 :::
 
+Exclude trials with a blink within 100 ms of a fixation on critical regions (`2, 3, 4`):
+
 ```{python prep-clean}
 ```
 
@@ -653,7 +770,24 @@ plt.show()
 blinks = load_participant(ASC_DIR / "C1L1.asc").events.frame.filter(pl.col("name") == "blink_eyelink")
 fixations_c1l1 = remove_short_fixations(reading)
 clean = remove_blink_trials(fixations_c1l1, blinks)
-print(fixations_c1l1["trial_id"].n_unique() - clean["trial_id"].n_unique(), "trial(s) excluded")
+print(
+    f"C1L1: {reading.height} raw fixations -> {fixations_c1l1.height} (>= 80 ms) -> "
+    f"{clean.height} across {clean['trial_id'].n_unique()} trials "
+    f"({fixations_c1l1['trial_id'].n_unique() - clean['trial_id'].n_unique()} blink trial(s) excluded)"
+)
+```
+
+## Optional: merging short fixations
+
+The paper merged fixations `< 80` ms into neighbours within `1` char (`16` px) instead of dropping them:
+
+```{python prep-merge}
+```
+
+```{python}
+#| output-location: slide
+merged_c1l1 = merge_short_fixations(reading)
+print(f"C1L1: {fixations_c1l1.height} fixations (drop <80 ms) vs {merged_c1l1.height} (merge <=16 px)")
 ```
 
 ## Step 7: reading measures
@@ -712,17 +846,37 @@ go-past time of R2 includes the regression, and the later fixations on R2 count 
 ::: {.step-strip data-step="7"}
 :::
 
+```{python prep-summary}
+#| echo: false
+```
+
 ```{python prep-participant}
 ```
 
-`main()` runs `preprocess()` for all 30 ASC files (in parallel) and writes `fixations.csv`, `measures.csv` and
-`questions.csv`:
+`main()` runs `preprocess()` for all 30 ASC files (in parallel) and writes `fixations.csv`, `measures.csv`,
+`questions.csv`, and `summary.csv`:
 
 ```{r}
 #| results: hide
-if (!file.exists("data/frases-comas/derived/simple/measures.csv"))
+if (!file.exists("data/frases-comas/derived/simple/summary.csv"))
   system2(Sys.getenv("RETICULATE_PYTHON", "python3"), "commas_preprocessing.py")
 ```
+
+## Data quality checks
+
+Always inspect calibration/validation error, exclusions, and trial counts per condition before modelling:
+
+```{r}
+summary_tbl <- read_csv("data/frases-comas/derived/simple/summary.csv", show_col_types = FALSE)
+summary_tbl |> filter(val_max > 1.0) |>
+  select(subject, val_avg, val_max, trials_blink, trials_kept, cond1_kept, cond2_kept)
+summary_tbl |> summarise(
+  across(c(trials_found, trials_repeated, trials_blink, trials_kept, fix_short, fix_off_text), sum)
+)
+```
+
+`r sum(summary_tbl$val_max > 1.0)` participants exceed `1.0°` max validation error (> 3 characters here); we keep all 30 to match the
+published paper, and flag them for sensitivity checks.
 
 ## Statistics: data
 
@@ -735,7 +889,8 @@ if (!file.exists("data/frases-comas/derived/simple/measures.csv"))
 ```{r stats-accuracy}
 ```
 
-The paper reports 95.6 % (89.2–100 %).
+The paper reports 95.6 % (89.2–100 %); always pre-specify an accuracy cut-off (e.g., < 80 %, especially in L2
+studies).
 
 ## Statistics: sentence time and cut-offs
 
@@ -743,9 +898,14 @@ The paper reports 95.6 % (89.2–100 %).
 :::
 
 ```{r stats-data}
+#| output-location: slide
 ```
 
-## Means (SE)
+Here "sentence reading time" is summed region `tvt` (on-text fixations only, not `DISPLAY ON -> ENDBUTTON`).
+Upper cut-offs are tuned to skilled L1 readers and trim slightly more comma-present observations — always count
+what each cut-off removes, and widen or avoid fixed L1 cut-offs for L2 readers.
+
+## Means (SE across participants)
 
 ::: {.step-strip data-step="8"}
 :::
@@ -762,15 +922,47 @@ post-comma 2 go-past 333 / 358 (comma present / omitted).
 ::: {.step-strip data-step="8"}
 :::
 
+Name the primary region and measure before modelling (here go-past / total time on pre-comma and post-comma 1;
+13 models are fitted only to match the paper):
+
 ```{r stats-models}
+#| warning: true
 ```
 
-The paper fitted Bayesian ex-Gaussian models (brms), which take much longer to fit:
+The paper fitted Bayesian ex-Gaussian models (`brms`), which handle maximal random effects via priors:
 
 ```{r}
 #| eval: false
 brm(bf(time ~ comma + (comma | subject) + (comma | item), beta ~ comma + (comma | subject) + (comma | item)),
     family = exgaussian(), data = d, prior = set_prior("normal(0, 100)", class = "b"))
+```
+
+## Convergence and singular-fit warnings in `lme4`
+
+- With `(1 + comma | subject) + (1 + comma | item)`, `lme4` gives **1 convergence warning** and **6 singular fits**
+  (`boundary (singular) fit`: a random-effect variance ≈ 0 or correlation = ±1).
+- Never silence `warning = FALSE` on model chunks: check `isSingular(model)`, try
+  `lmerControl(optimizer = "bobyqa")`, and simplify random effects in a stated order (e.g. drop correlations
+  `||`, then slopes → `(1 | subject) + (1 | item)` here for demonstration) — or use Bayesian LMMs (`brms`)
+  as the published paper did.
+
+## Scale choice: raw ms vs. `log(time)`
+
+Part 2 uses raw ms to match the paper's `brms` ex-Gaussian $\mu$; sensitivity check (`t_raw / t_log`):
+
+```{r stats-scale}
+#| warning: true
+```
+
+Go-past (`gpt`) and post-comma `tvt` hold on both scales, whereas `gd` effects weaken under `log(time)`.
+
+## Skipping probability (binomial GLMM)
+
+Reading-time models are conditional on fixation; `fpf` and `fpreg` also let us model skipping or regressions
+with `glmer(..., family = binomial)`:
+
+```{r stats-skipping}
+#| warning: true
 ```
 
 ## Comma effects: this analysis vs. the paper
@@ -788,26 +980,91 @@ changes little (≈ 1.5 %).
 
 Same data, same conclusions — but the analysis choices differ (details in `commas_README.md`):
 
-- **Blinks**: we exclude 58 trials, the paper 124 (stricter blink rule, plus long fixations)
+- **Blinks**: we exclude `r sum(summary_tbl$trials_blink)` trials across regions 2–4, the paper 124 (stricter blink rule across the trial, plus long fixations)
 - **Short fixations**: removed here; the paper merged some into neighbouring fixations
 - **Old software**: the paper's EyeDry program set long gaze (> 2 s) and total times (> 4 s) to missing, and,
   through a bug, added fixations from earlier trials (sentence times ~80 ms too long in both conditions)
-- **Model**: mean (lme4) vs. the μ parameter of an ex-Gaussian distribution (brms); effects close to the
-  95 % boundary (sentence time, gaze duration) can land on either side
+- **Scale & model**: raw ms (`lme4`) vs. ex-Gaussian $\mu$ (`brms`); the gaze-duration effects weaken on
+  `log(time)`, while go-past and post-comma total time hold on both scales
 
 Measures on the critical regions are identical to the original pipeline in about 99 % of the trials.
+
+## What changes with L2 participants?
+
+- **Design & measures**: L2 readers usually skip fewer words (`fpf`) and regress more (`fpreg`, `gpt`, `tvt`),
+  so report skipping and regression probability alongside durations
+- **Cut-offs & scale**: slower L2 fixations hit L1 upper cut-offs (2000 ms gaze, 4000 ms total) more often —
+  inspect trimmed counts by group/proficiency, widen cut-offs, or model `log(time)`
+- **Proficiency & group predictors**: sum-code group (`L1 = -0.5, L2 = +0.5`) or center/scale proficiency so
+  main effects remain interpretable; include random slopes of participant-level predictors by item:
+
+```{r}
+#| eval: false
+# Continuous proficiency (centered/scaled) or L1/L2 group interaction
+d$prof_z <- as.numeric(scale(d$proficiency))
+m_l2 <- lmer(log(gpt) ~ comma * prof_z + (1 + comma | subject) + (1 + comma * prof_z | item), data = d)
+```
+
+- **Multi-line texts & power**: single-line sentences fit cleanly into one `y` band; multi-line passages need
+  per-line `REGION`s and return-sweep/drift checks. Group × condition interactions also need larger samples.
+
+# Part 3: Visual world paradigm {background-color="#2c3e50"}
+
+## Visual world paradigm (`vwp.osexp`)
+
+```{python vwp-prep}
+```
+
+## Visual world: time-locking and binning
+
+Align samples to `TARGET_ONSET` and compute target, competitor, and distractor proportions per 50 ms bin:
+
+```{python vwp-bin}
+```
+
+## Visual world time course and statistics
+
+```{r}
+#| output-location: slide
+vwp_tc <- py$vwp_timecourse(
+  "data/opensesame_example/vwp-subject-1.asc",
+  "data/opensesame_example/vwp-subject-1.csv"
+) |> as_tibble()
+
+ggplot(vwp_tc, aes(bin, prop, colour = role)) +
+  geom_vline(xintercept = c(0, 200), linetype = c("solid", "dashed"), colour = "grey50") +
+  geom_line(linewidth = 1) + geom_point() +
+  labs(x = "Time relative to TARGET_ONSET (ms)",
+       y = "Proportion of looks (per object)", colour = NULL) +
+  theme_minimal(base_size = 14)
+```
+
+- **~200 ms saccade-planning delay** (dashed line): eye movements reflect lexical activation starting ~200 ms
+  after `TARGET_ONSET` (cohort competition between target and competitor, then target dominance).
+- **Statistics across participants**: aggregate proportions per participant × bin, then fit **growth-curve
+  analysis** (orthogonal polynomials of time in `lmer`/`glmer`) or **cluster-based permutation tests** (e.g.,
+  `eyetrackingR` / `permutes`) rather than running uncorrected t-tests on every bin.
+
+## From your tracker to pymovements
+
+- **EyeLink (`EDF -> ASC`)**: convert with `edf2asc` exporting **both samples and events** (no `-ns` or `-ne`
+  flags), then use `pm.gaze.from_asc(..., events=True, messages=True)`.
+- **Other trackers (Tobii, SMI, EyeLogic)**: `from_asc` reads EyeLink only. Read your CSV/TSV with `polars`
+  into `pm.Gaze(samples=..., experiment=..., pixel_columns=...)` and use **Part 1's sample-based route**
+  (`pix2deg` -> `pos2vel` -> `detect`), not Part 2's `fixation_eyelink` events.
 
 ## Summary
 
 - pymovements reads the raw file, labels trials with a message pattern, and maps fixations to areas of interest
-- pymovements also computes the reading measures; R (lme4) only does the statistics; the scripts are short
-  enough to read in full
-- Write down every choice (trial window, short fixations, blinks, outliers): they change the numbers, and
-  sometimes which effects cross the 95 % line
+- pymovements computes the reading measures; R (`lme4`) fits the models — `opensesame_preprocessing.py`,
+  `commas_preprocessing.py`, and `vwp_analysis.py` are templates whose message regexes must be adapted to your
+  own experiment messages and region layout
+- Log every preprocessing choice (trial window, eye, short fixations, blinks, cut-offs, scale): they shift
+  the numbers, and sometimes which effects reach significance
 
 ## Running the workshop
 
 ```bash
-docker compose up --build   # then open http://localhost:8787 (rstudio / workshop)
-quarto render workshop/presentation.qmd
+docker compose up --build   # opens on 127.0.0.1:8787 only (rstudio / workshop; change password on a network)
+quarto render presentation.qmd
 ```

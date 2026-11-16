@@ -1,0 +1,9 @@
+item,target,competitor,distractor1,distractor2,object_order,sound_file,target_onset,clicked,click_correct,click_rt,trial_aborted
+1,candle,candy,chair,apple,chair;candy;apple;candle,click_candle.wav,672,candle,1,922,0
+2,candy,candle,chair,apple,candle;apple;chair;candy,click_candy.wav,672,candy,1,1011,0
+3,bell,belt,fish,key,belt;fish;key;bell,click_bell.wav,672,bell,1,989,0
+4,belt,bell,fish,key,fish;bell;belt;key,click_belt.wav,672,belt,1,1010,0
+5,cat,cap,tree,cup,tree;cap;cup;cat,click_cat.wav,672,cat,1,947,0
+6,cap,cat,tree,cup,cat;cup;cap;tree,click_cap.wav,672,cap,1,957,0
+7,star,stairs,moon,heart,star;stairs;heart;moon,click_star.wav,672,star,1,1066,0
+8,stairs,star,moon,heart,moon;heart;star;stairs,click_stairs.wav,672,stairs,1,1001,0
