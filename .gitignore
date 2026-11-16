@@ -229,3 +229,6 @@ workshop/data/frases-comas/edf/*.EDF
 workshop/data/frases-comas/edf/*.exe
 workshop/data/frases-comas/edf/*.dll
 ~$*
+
+workshop/simple.html
+workshop/data/example_data/derived/

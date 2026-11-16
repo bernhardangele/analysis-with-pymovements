@@ -17,7 +17,9 @@
   function buildStrips() {
     document.querySelectorAll(".step-strip").forEach(s => {
       const step = +s.dataset.step;
-      s.innerHTML = STEPS.map((name, i) =>
+      // a deck can set its own step names: data-steps="a|b|c" on the strip, or window.STEP_NAMES
+      const steps = s.dataset.steps ? s.dataset.steps.split("|") : (window.STEP_NAMES || STEPS);
+      s.innerHTML = steps.map((name, i) =>
         `<span class="${i + 1 < step ? "done" : i + 1 === step ? "current" : ""}">${name}</span>`).join("");
     });
   }

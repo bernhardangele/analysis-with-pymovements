@@ -13,7 +13,10 @@ Its sentences are not in that repository; EyeTrack logged accented characters as
 
 | Path | Purpose |
 |---|---|
-| `workshop/presentation.qmd` | Quarto revealjs presentation; Python (reticulate) and R chunks in one document, `engine: knitr` |
+| `workshop/simple.qmd` | Simplified workshop: six conceptual steps for the four OpenSesame experiments, on their example data |
+| `workshop/data/example_data/` | Copy of `experiments/example_data/` of the recording workshop (e94abd3, regenerated with 18 reading participants): OpenSesame CSV + simulated 1000 Hz EyeLink ASC, participants 1–18 (reading) and 1–6 (others), made by its `make_example_data.py` (problems built in: see its `PROBLEMS`) |
+| `workshop/simple_preprocessing.py`, `simple_analysis.R` | Its one Python step (stock pymovements only) and its R steps (cleaning, measures, lme4) |
+| `workshop/presentation.qmd` | Detailed workshop: Quarto revealjs presentation; Python (reticulate) and R chunks in one document, `engine: knitr` |
 | `workshop/data/sub_1_example.asc` | Real binocular EyeLink recording (4 Spanish sentences, 1000 Hz), copied from `fixated/inst/extdata` |
 | `workshop/data/frases-comas/` | Angele et al. comma experiment: 30 ASC files (UMass EyeTrack), original `.da1`/`.IXS`, Tim10drop.pl, manuscript |
 | `tools/replication/frases_comas.py` | Not part of the workshop: exact Python ports of Tim10drop.pl and EyeDry, used to explain the differences to the paper |
@@ -90,6 +93,14 @@ Nothing here has unit tests; changes are tested by running the real analysis and
    collect `pageerror`/console errors; there must be none.
 6. Copy `/tmp/ws/presentation.html` to `workshop/` only for the user to look at; it is not committed.
 
+**Simplified workshop** (`workshop/simple*`)
+1. Data: `workshop/data/example_data/` (copied from the recording workshop). The Python step writes
+   `data/example_data/derived/` (git-ignored); delete it after the data change. The slides quote the problem
+   participants by number (reading 5 and 6, boundary 4 and 2, VWP 5 and 2) and the built-in effects of
+   `make_example_data.py`; check them on the "Did we find what we built in?" slide after new data arrive.
+2. Run `python3 simple_preprocessing.py` (~10 s) and `Rscript simple_analysis.R` from `workshop/`, then render
+   `simple.qmd` as described above. No model is singular with these data (18 reading participants); with fewer participants the SDs often are 0, and the slides mention this.
+
 ## Gotchas
 - Python/pymovements 0.28: `compute_event_properties(("location", {"position_column": "pixel"}))` takes a tuple, not kwargs.
   `from_asc(..., messages=True)` gives `gaze.messages` (`time` is float; cast to Int64). Samples are binocular:
@@ -111,6 +122,9 @@ Nothing here has unit tests; changes are tested by running the real analysis and
 - Animations: `animations.js` runs on `Reveal` slide changes. `::: {.pipeline}` with `.stage` / `.arrow` divs,
   `::: {.step-strip data-step="N"}` for the frases-comas steps, and a `div.scanpath-anim` with a `data-trial` JSON
   (written by a hidden Python chunk with `output: asis`).
+- pymovements `from_asc(patterns=[{"pattern": ..., "column": ..., "value": ...}])` puts the pattern after its own
+  `MSG <time>` prefix without a group: an alternation `A|B` breaks the whole regex. Use one entry per message.
+  `compute_reading_measures` only counts events named `fixation` unless `event_name="fixation_eyelink"` is given.
 - frases-comas: Part 2 of the slides shows the code of the `commas_*` scripts via `knitr::read_chunk` ("## ---- name"
   sections); keep labels in sync, and give everything that must not run in the slides (e.g. `main()`, the
   `if __name__ == "__main__"` block) its own label: under reticulate `__name__` is `"__main__"`. The slides run `commas_preprocessing.py` if
