@@ -1,6 +1,6 @@
 ---
-title: "Analysing eye-tracking experiments: the essentials"
-subtitle: "From the OpenSesame log file and the EyeLink file to a mixed model, for the four experiments of the recording workshop"
+title: "Analysing eye-tracking experiments"
+subtitle: "From the OpenSesame log file and the EyeLink file to a (simple) mixed model"
 format:
   revealjs:
     embed-resources: true
@@ -34,7 +34,7 @@ if (!file.exists("data/example_data/derived/vwp/fixations.csv")) {
 options(width = 110, pillar.min_title_chars = 12)
 ```
 
-## Where this workshop fits
+## Today's workshop
 
 ::: {.pipeline}
 ::: {.stage}
@@ -50,12 +50,12 @@ options(width = 110, pillar.min_title_chars = 12)
 →
 :::
 ::: {.stage .r}
-**This workshop** the same six analysis steps for each experiment
+**This workshop:** six analysis steps for each experiment
 :::
 :::
 
-- You built the experiments: you **defined** the variables (loop tables, inline scripts) and the
-  **messages** (`STIMONSET`, `REGION`, `DISPLAYCHANGE`, …). The analysis starts from exactly these.
+- This analysis uses the **variables** defined in the loop tables and inline scripts and the
+  **messages** (`STIMONSET`, `REGION`, `DISPLAYCHANGE`, …) that are written to the eye tracker file by Opensesame. The analysis starts from exactly these.
 - Today is about the **concepts**: which variables identify a condition, which trials and participants
   are usable, what to measure, how to test it.
 - **One short Python step** (pymovements) reads the eye-tracker file. Everything else is in R.
@@ -72,12 +72,10 @@ options(width = 110, pillar.min_title_chars = 12)
 - Times: the ASC file uses the **tracker clock**; OpenSesame's `time_*` columns use its own clock. Never mix them:
   everything about timing comes from the messages.
 
-## Today's data: the example data of the recording workshop
+## Today's data: data from yesterday (simulated)
 
-- `experiments/example_data/` of the recording workshop: OpenSesame **ran the experiments** for every
-  participant (so the log files are real), with a **simulated EyeLink** (1000 Hz) as the participant's eyes.
-- The simulated readers have **known effects**, and the data contain **problems**: finding them is part of
-  the analysis. Copied to `workshop/data/example_data/`.
+- `experiments/example_data/`: We didn't actually have time to run the full experiments yesterday, so I simulated the data.
+- The simulated readers have **known effects**, and the data contain simulated **problems** (see below).
 
 | Experiment | Participants | Trials each | Manipulation |
 |---|---|---|---|
@@ -86,17 +84,17 @@ options(width = 110, pillar.min_title_chars = 12)
 | `movingwindow` | 6 | 5 | window 4 vs. 12 letters × high/low |
 | `vwp` (visual world) | 6 | 8 | target, competitor, distractors |
 
-## Six steps, four experiments
+## Six steps
 
 ::: {.pipeline}
 ::: {.stage .r}
-**1 Log file** which columns are *your* variables?
+**1 Log file** which columns are the relevant variables?
 :::
 ::: {.stage .r}
 **2 Design** is it counterbalanced?
 :::
 ::: {.stage}
-**3 Tracker file** fixations, interest areas, measures (Python)
+**3 Tracker data file** fixations, interest areas, measures
 :::
 ::: {.stage .r}
 **4 Cleaning** participants, trials, fixations
@@ -109,9 +107,9 @@ options(width = 110, pillar.min_title_chars = 12)
 :::
 :::
 
-- Every experiment goes through the same steps. **Reading** is shown in detail; for the other three only
-  what is new.
-- Two scripts, both in `workshop/`: `simple_preprocessing.py` (step 3) and `simple_analysis.R` (all other steps).
+- Every experiment goes through the same steps. We will show the **reading** experiment in detail; for the other three we will only show what is new.
+- One self-contained R script per experiment in `workshop/`: `simple_reading.R`, `simple_boundary.R`,
+  `simple_movingwindow.R`, `simple_vwp.R` (step 3 runs Python via `reticulate`).
 
 ```{r r-setup}
 #| echo: false
@@ -128,7 +126,7 @@ ex <- read_csv("data/example_data/reading/subject-1.csv", show_col_types = FALSE
 
 - **Item 6**, with comma: *`r ex$comma`*
 - Without comma: *`r ex$no_comma`*
-- 130 items (the pilot version: 24). Every participant reads **every item once**: list A (even `subject_nr`)
+- 130 items (simulated files: 24). Every participant reads **every item once**: list A (even `subject_nr`)
   has the odd items with comma, list B the even items.
 - Trial: drift correction → gaze target at the start of the sentence (250 ms) → sentence → fixate the square in
   the bottom-right corner → yes/no question (only after some sentences).
@@ -142,10 +140,9 @@ ex <- read_csv("data/example_data/reading/subject-1.csv", show_col_types = FALSE
 ```{r r-reading-log}
 ```
 
-`r ncol(reading_log)` columns for every trial, and the practice trials are in the same file. Which columns did
-**you** define?
+`r ncol(reading_log)` columns for every trial, and the practice trials are in the same file. Which columns are important?
 
-## `r ncol(reading_log)` columns: which ones are yours?
+## `r ncol(reading_log)` columns: which ones are important?
 
 ::: {.step-strip data-step="1"}
 :::
@@ -180,9 +177,10 @@ Global variables in inline scripts are experimental variables, so they end up in
 ```{r r-reading-design}
 ```
 
-- Each participant: 12 items with and 12 without comma; across the two lists, every item in **both** versions.
+- In this simulated subset (24 of the 130 items), each participant saw 12 items with and 12 without comma
+  (65 + 65 in the full experiment); across the two lists, every item appears in **both** versions.
 - If not: a session crashed, a subject number was used twice, or the list rule in `prepare_trial` is wrong.
-  Check this **before** looking at eye movements (and after the first two pilot participants).
+  Check this **before** looking at eye movements.
 
 ## Where is the comma?
 
@@ -194,10 +192,9 @@ The critical word is not in the log file, but the two versions are:
 ```{r r-reading-critical}
 ```
 
-The **pre-comma word** is word `precomma`, the **post-comma word** the one after it. Word 1 is never
-critical: readers are already looking at it (gaze target) when the sentence appears.
+The **pre-comma word** is word `precomma`, the **post-comma word** the one after it. Word 1 is not analysed since readers already fixate it when the sentence starts.
 
-## Step 3: what the tracker file contains
+## Step 3: The eye tracker data file
 
 ::: {.step-strip data-step="3"}
 :::
@@ -219,6 +216,20 @@ cat(str_trunc(str_replace_all(lines, "\t", "  "), 100), sep = "\n")
 - **Messages** (`MSG time text`) are what your experiment wrote with `eyetracker.log()`.
 - **Samples** (time, x, y, pupil; here 1000 Hz) and **events** computed by the EyeLink
   (`SFIX`/`EFIX` fixation, `SSACC`/`ESACC` saccade, `SBLINK`/`EBLINK` blink).
+
+## From samples to fixations and saccades
+
+::: {.step-strip data-step="3"}
+:::
+
+```{python}
+#| echo: false
+#| output: asis
+import sys
+sys.path.insert(0, "")                     # this folder
+import simple_animations                   # data for the animations (assets/animations.js)
+print(simple_animations.samples_div(subject=1, item=6))
+```
 
 ## The messages of one trial
 
@@ -266,7 +277,7 @@ ggplot(fix_6) +
   theme_minimal(base_size = 15) + theme(legend.position = "bottom")
 ```
 
-## The Python step: read the file
+## Use pymovements to read the file
 
 ::: {.step-strip data-step="3"}
 :::
@@ -329,39 +340,29 @@ fixations = fixations_on_regions(gaze, aois)
 
 ## One trial on the screen
 
-```{r}
+::: {.step-strip data-step="3"}
+:::
+
+```{python}
 #| echo: false
-#| fig-height: 4
-regions_of <- function(experiment) {
-  read_messages(experiment) |>
-    filter(str_starts(content, "REGION ")) |>
-    extract(content, c("n", "label", "left", "top", "right", "bottom"),
-            "REGION n=(\\d+) label=(\\S+) left=(\\d+) top=(\\d+) right=(\\d+) bottom=(\\d+)", convert = TRUE)
-}
-reg_6 <- regions_of("reading") |> filter(subject_nr == 1, item == 6)
-f6 <- fix_6 |> filter(phase == "stimulus", x < 1700) |> mutate(k = row_number())
-ggplot() +
-  geom_rect(data = reg_6, aes(xmin = left, xmax = right, ymin = top, ymax = bottom), fill = "grey95",
-            colour = "grey60") +
-  geom_text(data = reg_6, aes(x = (left + right) / 2, y = 540, label = label), size = 5) +
-  geom_path(data = f6, aes(x, y), colour = "#2b6cb0", alpha = 0.6) +
-  geom_point(data = f6, aes(x, y, size = duration), colour = "#2b6cb0", alpha = 0.7) +
-  geom_text(data = f6, aes(x, y - 12, label = k), size = 5) +
-  scale_y_reverse() + coord_cartesian(ylim = c(500, 580)) +
-  labs(x = NULL, y = NULL, size = "ms") + theme_minimal(base_size = 14)
+#| output: asis
+print(simple_animations.aoi_div(item=6, subjects=(1, 5)))
 ```
 
-Fixations (numbered in time order) on the word boxes from the `REGION` messages: the reader skips short words,
-refixates long ones, and sometimes goes back (**regression**).
+- Each `REGION` message is a **box**; a fixation belongs to the word whose box contains it (`n`, `label`).
+- The reader **skips** short words and **refixates** long ones. Subject 5 read the same sentence, but the
+  calibration was poor: the fixations lie below the boxes (step 4).
 
-## For all participants: `simple_preprocessing.py`
+## For all participants: `preprocess_experiment()`
 
 ::: {.step-strip data-step="3"}
 :::
 
-```bash
-cd workshop
-python3 simple_preprocessing.py     # all four experiments, ~10 seconds
+```r
+# In simple_reading.R (runs the Python step via reticulate, once per experiment)
+if (!file.exists(file.path(DATA, "derived", "reading", "measures.csv"))) {
+  py$preprocess_experiment("reading")
+}
 ```
 
 Writes four tables per experiment to `data/example_data/derived/<experiment>/`:
@@ -387,7 +388,7 @@ In R, `read_log()` reads all log files of an experiment, `read_tracker()` one of
 #| output-location: slide
 ```
 
-## Who is out, and why?
+## Excluding participants
 
 ::: {.step-strip data-step="4"}
 :::
@@ -406,8 +407,7 @@ fixations |>
   theme_minimal(base_size = 14)
 ```
 
-- **Subject 5**: validation error `r participants$validation[participants$subject_nr == 5]`° (accepted although above 1°): every fixation is ~45 px below the line,
-  so almost **no** fixation falls on a word. Exclude, or re-calibrate during the session.
+- **Subject 5**: validation error `r participants$validation[participants$subject_nr == 5]`° (accepted although above 1°): every fixation is ~45 px below the line. This is a large error. For a single line trial, the data can still be analysed, although the participant could also be excluded.
 - **Subject 6**: `r round(100 * participants$accuracy[participants$subject_nr == 6])` % correct: not reading for comprehension. Set the criterion (here 75 %) **before** looking.
 
 ## Step 4: trials
@@ -438,6 +438,20 @@ fixations |>
 
 **First pass** = before any word further to the right was fixated. pymovements gives **0** for a skipped
 word: a skipped word has **no** gaze duration, so turn it into `NA` (otherwise the mean drops).
+
+## Reading measures, fixation by fixation
+
+::: {.step-strip data-step="5"}
+:::
+
+```{python}
+#| echo: false
+#| output: asis
+print(simple_animations.measures_div(subject=1, item=2))
+```
+
+The reader goes back from word 6 to word 5: **gaze duration** of word 6 ends there, its **go-past time** includes
+the regression, and the second fixation on word 5 counts for its **total time** only.
 
 ## Measures on the critical words
 
@@ -731,12 +745,91 @@ wrong clicks (visual world 2), and a blink or two per participant.
 
 ```bash
 cd workshop
-python3 simple_preprocessing.py        # Python step, ~10 s
-Rscript simple_analysis.R              # all R steps
+Rscript simple_reading.R       # one experiment, complete: Python step (via reticulate) + all R steps
+Rscript simple_boundary.R      # also: simple_movingwindow.R, simple_vwp.R
 ```
 
+- Each file is **self-contained**: open it in RStudio and run it line by line.
 - Your own data: put `subject-*.csv` and `subject-*.asc` (`edf2asc subject-3.edf`) into a folder per experiment
-  (e.g. `data/mystudy/reading/`), and set `DATA` in both scripts to `data/mystudy` (now `data/example_data`).
+  (e.g. `data/mystudy/reading/`), and set `DATA` (twice in each file: R and Python) to `data/mystudy`.
 - More detail (fixation detection, a real published data set, the differences to its original analysis):
-  `presentation.qmd`.
+  `full_presentation/full_presentation.qmd`.
 - Recording workshop: <https://github.com/bernhardangele/eye-movement-experiments-with-opensesame>
+
+# Outlook: more than one line {background-color="#2b3e50"}
+
+## From a sentence to a paragraph
+
+Everything today was **one line** of text. With several lines, four things change:
+
+- **Vertical position matters.** One line: a fixation anywhere near the line counts (our word boxes were 72 px
+  high). Several lines: 30–60 px apart, about as much as an ordinary calibration error.
+- **Return sweeps.** The long saccade to the next line often lands short and is corrected; fixations at the start
+  of a line are longer, at the end shorter. A return sweep goes left, but it is **not** a regression.
+- **Longer trials.** More drift, more blinks, no drift correction between lines: "exclude every trial with a
+  blink" would exclude almost everything.
+- **Less predictable readers.** They skip lines, reread whole lines, look at the margins.
+
+## The problem: vertical drift
+
+```{r}
+#| echo: false
+#| fig-height: 4.3
+set.seed(3)
+lines_y <- 300 + 56 * 0:4                                        # five lines, 56 px apart
+sim <- map(seq_along(lines_y), \(l) tibble(line = l, x = cumsum(c(150, runif(9, 70, 150))))) |>
+  list_rbind() |>
+  filter(x < 1250) |>
+  mutate(k = row_number(), true_y = lines_y[line],
+         # what the tracker reports: noise, a slope across the screen, and drift that grows during the trial
+         y = true_y + rnorm(n(), 0, 5) + 0.015 * (x - 150) + 32 * k / n(),
+         nearest = map_int(y, \(v) which.min(abs(v - lines_y))),
+         result = if_else(nearest == line, "correct line", "wrong line"))
+panels <- c("Where the reader looked", "What the tracker recorded → nearest line")
+bind_rows(mutate(sim, y = true_y + rnorm(n(), 0, 5), result = "correct line", panel = panels[1]),
+          mutate(sim, panel = panels[2])) |>
+  mutate(panel = factor(panel, panels)) |>
+  ggplot(aes(x, y)) +
+  annotate("rect", xmin = 125, xmax = 1280, ymin = lines_y - 27, ymax = lines_y + 27, fill = "grey92") +
+  geom_path(colour = "grey60", linewidth = 0.3) +
+  geom_point(aes(colour = result), size = 3) +
+  facet_wrap(~panel) + scale_y_reverse() +
+  scale_colour_manual(values = c("correct line" = "#2b6cb0", "wrong line" = "#e53e3e")) +
+  labs(x = "x (px)", y = "y (px)", colour = NULL,
+       title = "Simulated reader, five lines: a small slope and a slow drift during the trial") +
+  theme_minimal(base_size = 14) + theme(legend.position = "bottom")
+```
+
+`r sum(sim$result == "wrong line")` of `r nrow(sim)` fixations get the **wrong line**, hence the wrong word, hence
+wrong reading measures. Bigger word boxes do not help: the boxes of neighbouring lines touch.
+
+## Vertical drift correction: which line was it?
+
+Assign every fixation to a **line** first, then to a word. Carr et al. (2022) compare ten algorithms:
+
+| Idea | Algorithms | Weak point |
+|---|---|---|
+| the **nearest** line | `attach`; `chain` (groups of neighbouring fixations) | any drift larger than half a line |
+| fixations of a line form a **cluster**; or fit offset, slope, scale | `cluster`, `merge`; `regress`, `stretch` | few fixations on a line, drift that changes during the trial |
+| find the **return sweeps**, cut the sequence there | `segment`, `split` | rereading: every long backward saccade looks like a return sweep |
+| match the sequence to the **expected reading order** | `compare`, `warp` (dynamic time warping) | readers who do not read in order |
+
+No algorithm wins everywhere: it depends on the kind of drift and on how linearly the reader read.
+
+## Multi-line reading in practice
+
+- **Design**: generous line spacing (double or more), few lines per screen, a monospace font, calibrate
+  carefully and re-calibrate often. Prevention is cheaper than correction.
+- **Correct, then check**: run two different algorithms, and **look** at the trials where they disagree. Report the
+  algorithm, and how many trials were corrected by hand or excluded.
+- **After that, the same six steps**: a corrected fixation gets the y of its line, then
+  fixations → words → reading measures as today. First pass and regressions are defined on the **word number**,
+  not on x, so a return sweep is not a regression.
+- **In the analysis**: treat line-initial and line-final words separately (or exclude them); clean blinks
+  per region, not per trial.
+
+::: {style="font-size: 0.6em"}
+Carr, J. W., Pescuma, V. N., Furlan, M., Ktori, M., & Crepaldi, D. (2022). Algorithms for the automated correction
+of vertical drift in eye-tracking data. *Behavior Research Methods, 54*, 287–310.
+<https://doi.org/10.3758/s13428-021-01554-0> (implemented in the Python package `eyekit`)
+:::

@@ -5,8 +5,11 @@ format:
     embed-resources: true
     width: 1280
     height: 720
-    theme: [default, assets/custom.scss]
-    include-after-body: assets/scripts.html
+    theme: [default, ../assets/custom.scss]
+    include-after-body:
+      text: |
+        <script src="../assets/gsap.min.js"></script>
+        <script src="../assets/animations.js"></script>
     code-line-numbers: false
 engine: knitr
 ---
@@ -92,7 +95,7 @@ for (f in c("commas_preprocessing.py", "commas_statistics.R", "vwp_analysis.py")
 Everything up to the reading measures is done in Python with **pymovements**; R does plots and statistics.
 
 All Part 1 results are computed from a **simulated `reading.osexp` recording**
-(`data/opensesame_example/subject-1.asc` + `reading-subject-1.csv`, 1000 Hz, 6 trials including 1 aborted trial),
+(`../data/opensesame_example/subject-1.asc` + `reading-subject-1.csv`, 1000 Hz, 6 trials including 1 aborted trial),
 matching the companion OpenSesame workshop.
 
 ## Reading `polars` (for R users)
@@ -118,7 +121,7 @@ import polars as pl
 import pymovements as pm
 
 gaze_raw = pm.gaze.from_asc(
-    "data/opensesame_example/subject-1.asc",
+    "../data/opensesame_example/subject-1.asc",
     patterns=[r"TRIALINFO item=(?P<trial>\d+)"],
     messages=True,
 )
@@ -171,7 +174,7 @@ boxes (which restores accented characters and adds `condition`):
 ```{python}
 #| output-location: slide
 csv_words = (
-    pl.read_csv("data/opensesame_example/reading-subject-1.csv")
+    pl.read_csv("../data/opensesame_example/reading-subject-1.csv")
     .filter(pl.col("trial_aborted") == 0)
     .select(trial="item", condition="condition", word=pl.col("sentence").str.split(" "))
     .explode("word")
@@ -288,7 +291,7 @@ Clip EyeLink fixations to `[display_on, display_off]` so counts and durations co
 
 ```{python}
 #| output-location: slide
-el = pm.gaze.from_asc("data/opensesame_example/subject-1.asc", events=True).events.frame
+el = pm.gaze.from_asc("../data/opensesame_example/subject-1.asc", events=True).events.frame
 fix_el = (
     el.filter((pl.col("name") == "fixation_eyelink") & (pl.col("eye") == "right"))
     .join_where(trials, pl.col("offset") > pl.col("display_on"), pl.col("onset") < pl.col("display_off"))
@@ -500,7 +503,7 @@ file (in your own study, join word predictors such as cognate status or L2 frequ
 
 ```{r}
 #| output-location: slide
-subtlex <- read_tsv(Sys.getenv("SUBTLEX_ESP", "data/SUBTLEX-ESP_form_zipf.txt"),
+subtlex <- read_tsv(Sys.getenv("SUBTLEX_ESP", "../data/SUBTLEX-ESP_form_zipf.txt"),
                     col_names = c("form", "zipf"), col_types = "cd", progress = FALSE)
 
 freq <- measures |>
@@ -540,7 +543,7 @@ m_freq <- lmer(log(gd) ~ zipf_c + word_length_c + (1 + zipf_c + word_length_c | 
 
 ## Reading(,) with and without commas
 
-Angele, Gutiérrez-Cordero, Perea & Marcet (`data/frases-comas/manuscript-revision-2.pdf`)
+Angele, Gutiérrez-Cordero, Perea & Marcet (`../data/frases-comas/manuscript-revision-2.pdf`)
 
 - 130 Spanish sentences with mandatory commas, shown **with** (condition 1) or **without** (condition 2) them
 - 30 participants, each sentence once; comprehension questions after 34 sentences
@@ -589,7 +592,7 @@ we track every choice below.
 Steps 1–7: `commas_preprocessing.py` (**pymovements**) → `measures.csv`. Step 8: `commas_statistics.R` (**R**).
 
 ```bash
-cd workshop
+cd workshop/full_presentation
 python commas_preprocessing.py && Rscript commas_statistics.R
 ```
 
@@ -858,7 +861,7 @@ go-past time of R2 includes the regression, and the later fixations on R2 count 
 
 ```{r}
 #| results: hide
-if (!file.exists("data/frases-comas/derived/simple/summary.csv"))
+if (!file.exists("../data/frases-comas/derived/simple/summary.csv"))
   system2(Sys.getenv("RETICULATE_PYTHON", "python3"), "commas_preprocessing.py")
 ```
 
@@ -867,7 +870,7 @@ if (!file.exists("data/frases-comas/derived/simple/summary.csv"))
 Always inspect calibration/validation error, exclusions, and trial counts per condition before modelling:
 
 ```{r}
-summary_tbl <- read_csv("data/frases-comas/derived/simple/summary.csv", show_col_types = FALSE)
+summary_tbl <- read_csv("../data/frases-comas/derived/simple/summary.csv", show_col_types = FALSE)
 summary_tbl |> filter(val_max > 1.0) |>
   select(subject, val_avg, val_max, trials_blink, trials_kept, cond1_kept, cond2_kept)
 summary_tbl |> summarise(
@@ -1027,8 +1030,8 @@ Align samples to `TARGET_ONSET` and compute target, competitor, and distractor p
 ```{r}
 #| output-location: slide
 vwp_tc <- py$vwp_timecourse(
-  "data/opensesame_example/vwp-subject-1.asc",
-  "data/opensesame_example/vwp-subject-1.csv"
+  "../data/opensesame_example/vwp-subject-1.asc",
+  "../data/opensesame_example/vwp-subject-1.csv"
 ) |> as_tibble()
 
 ggplot(vwp_tc, aes(bin, prop, colour = role)) +
@@ -1066,5 +1069,5 @@ ggplot(vwp_tc, aes(bin, prop, colour = role)) +
 
 ```bash
 docker compose up --build   # opens on 127.0.0.1:8787 only (rstudio / workshop; change password on a network)
-quarto render presentation.qmd
+cd full_presentation && quarto render full_presentation.qmd
 ```

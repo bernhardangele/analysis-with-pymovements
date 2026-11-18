@@ -7,10 +7,10 @@ For each participant (one ASC file), pymovements
   3. assigns each fixation to a region of the sentence (areas of interest),
   4. after removing short fixations and trials with blinks, computes the reading measures per trial and region.
 
-The script writes fixations.csv, measures.csv and questions.csv to data/frases-comas/derived/simple/. The
+The script writes fixations.csv, measures.csv and questions.csv to ../data/frases-comas/derived/simple/. The
 statistics are done in R (commas_statistics.R).
 
-    cd workshop
+    cd workshop/full_presentation
     python commas_preprocessing.py      # about 1-2 minutes
 
 The "## ---- name" lines mark the parts that are shown in the slides.
@@ -24,7 +24,7 @@ import polars as pl
 import pymovements as pm
 from pymovements.measure.reading import compute_reading_measures
 
-DATA = Path("data") / "frases-comas"
+DATA = Path("..") / "data" / "frases-comas"
 ASC_DIR = DATA / "edf"
 OUT = DATA / "derived" / "simple"
 
@@ -269,7 +269,7 @@ def preprocess(asc_file):
 
 ## ---- prep-main
 def main(workers=4):
-    assert ASC_DIR.exists(), f"Missing {ASC_DIR} — run from workshop/"
+    assert ASC_DIR.exists(), f"Missing {ASC_DIR} — run from workshop/full_presentation/"
     files = sorted(ASC_DIR.glob("*.asc"))
     with ProcessPoolExecutor(max_workers=workers) as pool:
         results = list(pool.map(preprocess, files))

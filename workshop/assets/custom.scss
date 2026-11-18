@@ -40,11 +40,15 @@ $presentation-heading-color: #2b3e50;
   span.current { background: #2b6cb0; color: white; font-weight: bold; }
 }
 
-// animated scanpath
-.scanpath-anim {
+// animated scanpath, samples -> saccades, interest areas
+.scanpath-anim, .samples-anim, .aoi-anim {
   svg { width: 100%; height: auto; display: block; }
-  .controls { font-size: 0.55em; color: #4a5568; }
-  button { font-size: 1em; margin-right: 0.5em; cursor: pointer; }
+  // reveal.js hides its own navigation arrows (.reveal .controls): undo that for the animation buttons
+  .reveal & .controls { display: block; position: static; pointer-events: auto; z-index: auto;
+                        font-size: 0.55em; color: #4a5568; }
+  .reveal & .controls button { position: static; visibility: visible; opacity: 1; transform: none;
+                               padding: 0.1em 0.5em; border: 1px solid #a0aec0; border-radius: 4px;
+                               background-color: #edf2f7; font-size: 1em; margin-right: 0.5em; cursor: pointer; }
   table { font-size: 0.75em; margin: 0.4em auto 0; border-collapse: collapse; }
   td, th { padding: 0.1em 0.8em; text-align: right; }
 }

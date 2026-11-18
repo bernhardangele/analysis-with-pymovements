@@ -1,17 +1,17 @@
 # frases-comas: a simple analysis with pymovements and R
 
 This is the analysis of the comma experiment (Angele, Gutiérrez-Cordero, Perea & Marcet; manuscript in
-`data/frases-comas/`) the way we would do it today. Everything up to the reading measures is done with pymovements, the
+`../data/frases-comas/`) the way we would do it today. Everything up to the reading measures is done with pymovements, the
 statistics in R; the scripts are short and each step is explained in comments. Part 2 of the slides
-(`presentation.qmd`) walks through the same code.
+(`full_presentation.qmd`) walks through the same code.
 
-| Step | Script | Main functions | Output (`data/frases-comas/derived/simple/`) |
+| Step | Script | Main functions | Output (`../data/frases-comas/derived/simple/`) |
 |---|---|---|---|
 | 1. Read the ASC files, label trials, fixation positions, regions, cleaning, reading measures | `commas_preprocessing.py` | `pm.gaze.from_asc(patterns=..., events=True)`, `Gaze.compute_event_properties`, `pm.stimulus.TextStimulus`, `Events.map_to_aois`, `pymovements.measure.reading.compute_reading_measures` | `fixations.csv`, `measures.csv`, `questions.csv`, `summary.csv` |
 | 2. Tables and models, comparison with the paper | `commas_statistics.R` | `lme4::lmer`, `lme4::glmer` | printed tables, `comma_effects.png` |
 
 ```bash
-cd workshop
+cd workshop/full_presentation
 python commas_preprocessing.py   # ~1 min
 Rscript commas_statistics.R      # ~15 s
 ```

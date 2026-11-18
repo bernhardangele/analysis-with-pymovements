@@ -1,4 +1,4 @@
-"""The one Python step of the simplified workshop (`simple.qmd`): eye-tracker file -> tables for R.
+"""The one Python step of the workshop (`workshop.qmd`): eye-tracker file -> tables for R.
 
 For each recording (subject-N.asc) of the four experiments of the recording workshop, pymovements
   1. reads the samples, the EyeLink events and the messages; the messages that OpenSesame wrote label every
@@ -112,20 +112,24 @@ def preprocess(asc_file, reading=True):
     return tables
 
 
+## ---- py-experiment
+def preprocess_experiment(experiment, map=map):
+    """All recordings of one experiment -> data/example_data/derived/<experiment>/<table>.csv."""
+    files = sorted((DATA / experiment).glob("subject-*.asc"), key=lambda f: int(f.stem.split("-")[1]))
+    results = list(map(preprocess, files, [experiment != "vwp"] * len(files)))  # no words in the VWP
+    out = DATA / "derived" / experiment
+    out.mkdir(parents=True, exist_ok=True)
+    for name in results[0]:
+        pl.concat([r[name] for r in results], how="diagonal_relaxed").write_csv(out / f"{name}.csv")
+    print(f"{experiment}: {len(files)} recordings -> {out}")
+
+
 ## ---- py-main
 def main(experiments=("reading", "boundary", "movingwindow", "vwp"), workers=4):
     from concurrent.futures import ProcessPoolExecutor
-    for experiment in experiments:
-        files = sorted((DATA / experiment).glob("subject-*.asc"),
-                       key=lambda f: int(f.stem.split("-")[1]))
-        reading = [experiment != "vwp"] * len(files)
-        with ProcessPoolExecutor(max_workers=workers) as pool:
-            results = list(pool.map(preprocess, files, reading))
-        out = DATA / "derived" / experiment
-        out.mkdir(parents=True, exist_ok=True)
-        for name in results[0]:
-            pl.concat([r[name] for r in results], how="diagonal_relaxed").write_csv(out / f"{name}.csv")
-        print(f"{experiment}: {len(files)} recordings -> {out}")
+    with ProcessPoolExecutor(max_workers=workers) as pool:      # several recordings at the same time
+        for experiment in experiments:
+            preprocess_experiment(experiment, pool.map)
 
 
 ## ---- py-run

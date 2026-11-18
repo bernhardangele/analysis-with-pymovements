@@ -4,6 +4,7 @@
     "dockerfile": "../Dockerfile",
     "context": ".."
   },
+  "overrideCommand": false,
   "workspaceMount": "source=${localWorkspaceFolder},target=/home/rstudio/project,type=bind",
   "workspaceFolder": "/home/rstudio/project",
 

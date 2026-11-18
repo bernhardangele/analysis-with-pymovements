@@ -68,6 +68,6 @@ def vwp_timecourse(asc_file, csv_file, bin_ms=50, start_ms=-200, end_ms=900):
 
 ## ---- vwp-main
 if __name__ == "__main__":
-    vwp_dir = Path("data") / "opensesame_example"
+    vwp_dir = Path("..") / "data" / "opensesame_example"
     tc = vwp_timecourse(vwp_dir / "vwp-subject-1.asc", vwp_dir / "vwp-subject-1.csv")
     print(tc.head(12))

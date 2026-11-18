@@ -7,8 +7,8 @@ Demonstrates the exact bridge from the companion recording workshop
   3. Parse word AOIs (including `top`/`bottom` y-bounds) directly from `REGION` messages.
   4. Map fixations to AOIs, compute reading measures, and join the OpenSesame CSV (`reading-subject-1.csv`).
 
-Note: `data/opensesame_example/` contains a simulated recording matching `reading.osexp` until replaced
-with a lab recording. The `## ---- name` markers select chunks shown in `presentation.qmd`.
+Note: `../data/opensesame_example/` contains a simulated recording matching `reading.osexp` until replaced
+with a lab recording. The `## ---- name` markers select chunks shown in `full_presentation.qmd`.
 """
 
 ## ---- os-setup
@@ -18,7 +18,7 @@ import polars as pl
 import pymovements as pm
 from pymovements.measure.reading import compute_reading_measures
 
-OS_DIR = Path("data") / "opensesame_example"
+OS_DIR = Path("..") / "data" / "opensesame_example"
 
 
 ## ---- os-load

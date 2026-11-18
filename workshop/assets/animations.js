@@ -1,4 +1,5 @@
 // GSAP animations for the workshop slides. Each animation starts when its slide is shown.
+// The data of .scanpath-anim / .samples-anim / .aoi-anim come from a hidden Python chunk (data-trial JSON).
 (function () {
   const STEPS = ["1 read", "2 trial times", "3 regions", "4 fixations → regions", "5 reading window",
                  "6 cleaning", "7 reading measures", "8 statistics (R)"];
@@ -60,10 +61,15 @@
     // table of measures, filled in while the animation runs
     const measures = ["first fixation", "gaze duration", "go-past time", "total time"];
     const table = document.createElement("table");
-    table.innerHTML = `<tr><th></th>${d.regions.map(r => `<th>${r.label}</th>`).join("")}</tr>` +
-      measures.map((m, i) => `<tr><th>${m}</th>${d.regions.map(r => `<td data-m="${i}" data-r="${r.region}"></td>`).join("")}</tr>`).join("");
+    const columns = d.regions.filter(r => r.table !== false);   // a deck can show only some regions in the table
+    table.innerHTML = `<tr><th></th>${columns.map(r => `<th>${r.label}</th>`).join("")}</tr>` +
+      measures.map((m, i) => `<tr><th>${m}</th>${columns.map(r => `<td data-m="${i}" data-r="${r.region}"></td>`).join("")}</tr>`).join("");
     box.appendChild(table);
-    const cell = (m, r) => table.querySelector(`td[data-m="${m}"][data-r="${r}"]`);
+    const put = (m, r, value) => {
+      const td = table.querySelector(`td[data-m="${m}"][data-r="${r}"]`);
+      if (td) td.textContent = value;
+      return value;
+    };
 
     function timeline() {
       trail.innerHTML = "";
@@ -84,18 +90,18 @@
           if (f.region == null) return;
           const r = f.region;
           sums.tvt[r] = (sums.tvt[r] || 0) + f.duration;
-          cell(3, r).textContent = sums.tvt[r];
+          put(3, r, sums.tvt[r]);
           // go-past: from entering a region in first pass until a region further right is fixated
           for (const g of Object.keys(gpOpen)) {
             if (!gpOpen[g]) continue;
             if (r > g) { gpOpen[g] = false; continue; }
-            cell(2, g).textContent = (sums.gp[g] += f.duration);
+            put(2, g, (sums.gp[g] += f.duration));
           }
-          if (f.first_pass && !(r in gpOpen)) { gpOpen[r] = true; cell(2, r).textContent = (sums.gp[r] = f.duration); }
+          if (f.first_pass && !(r in gpOpen)) { gpOpen[r] = true; put(2, r, (sums.gp[r] = f.duration)); }
           if (f.first_pass) {
-            if (!(r in sums.ffd)) cell(0, r).textContent = (sums.ffd[r] = f.duration);
+            if (!(r in sums.ffd)) put(0, r, (sums.ffd[r] = f.duration));
             sums.gd[r] = (sums.gd[r] || 0) + f.duration;
-            cell(1, r).textContent = sums.gd[r];
+            put(1, r, sums.gd[r]);
           }
         });
       });
@@ -108,16 +114,186 @@
     box.play = () => { tl.kill(); tl = timeline(); tl.play(); };
   }
 
+  // replay / slow-motion buttons and the automatic start on the slide, shared by the animations below
+  function controls(box, timeline) {
+    let tl = null;
+    const run = (speed, ...args) => { tl && tl.kill(); tl = timeline(...args); tl.timeScale(speed).play(); };
+    const replay = box.querySelector(".replay"), slow = box.querySelector(".slow");
+    if (replay) replay.onclick = () => run(1);
+    if (slow) slow.onclick = () => run(0.35);
+    box.play = () => run(1);
+    return run;
+  }
+
+  // samples -> velocity -> saccades and fixations: a playhead moves through the first second of a trial
+  const COLOURS = {fixation: "#2b6cb0", saccade: "#e53e3e", blink: "#a0aec0"};
+  let clipCount = 0;
+  function buildSamples(box) {
+    const d = JSON.parse(box.dataset.trial), T = d.x.length;
+    const L = 60, R = 1185, A = [34, 180], B = [224, 330], E = [366, 384];
+    const svg = el("svg", {viewBox: "0 0 1200 450"});
+    box.prepend(svg);
+    const sx = t => L + (R - L) * t / T;
+    const xs = d.x.filter(v => v != null), xmin = Math.min(...xs), xmax = Math.max(...xs);
+    const vmax = Math.max(...d.v.filter(v => v != null));
+    const ya = x => A[1] - 6 - (x - xmin) / (xmax - xmin) * (A[1] - A[0] - 12);
+    const yb = v => B[1] - v / vmax * (B[1] - B[0] - 4);
+    const path = (values, y) => values.map((v, t) =>
+      v == null ? "" : `${t === 0 || values[t - 1] == null ? "M" : "L"}${sx(t).toFixed(1)} ${y(v).toFixed(1)}`).join("");
+    const title = (y, text) => (el("text", {x: L, y, "font-size": 17, fill: "#2b3e50", "font-weight": "bold"}, svg).textContent = text);
+    const small = (x, y, text, attrs) =>
+      (el("text", Object.assign({x, y, "font-size": 14, fill: "#4a5568"}, attrs || {}), svg).textContent = text);
+
+    // frames, axes
+    title(A[0] - 12, "Samples: horizontal gaze position, one sample per millisecond");
+    title(B[0] - 12, "Velocity: how fast does the position change?");
+    title(E[0] - 10, "The EyeLink's own events (SFIX/EFIX, SSACC/ESACC, SBLINK/EBLINK)");
+    for (const [top, bottom] of [A, B])
+      el("rect", {x: L, y: top, width: R - L, height: bottom - top, fill: "#f7fafc", stroke: "#cbd5e0"}, svg);
+    small(L - 6, ya(xmin) + 5, Math.round(xmin) + " px", {"text-anchor": "end"});
+    small(L - 6, ya(xmax) + 5, Math.round(xmax) + " px", {"text-anchor": "end"});
+    small(L - 6, yb(0) + 2, "0", {"text-anchor": "end"});
+    small(L - 6, yb(vmax) + 10, Math.round(vmax) + "°/s", {"text-anchor": "end"});
+    for (let t = 0; t <= T; t += 200) {
+      el("line", {x1: sx(t), x2: sx(t), y1: E[1] + 4, y2: E[1] + 9, stroke: "#718096"}, svg);
+      small(sx(t), E[1] + 24, t === 0 ? "0 ms (STIMONSET)" : t, {"text-anchor": t === 0 ? "start" : "middle"});
+    }
+
+    // what the threshold finds: bands (saccade, blink) and bars (fixation), hidden until the playhead arrives
+    const found = d.detected.map(s => {
+      const g = el("g", {opacity: 0}, svg), x = sx(s.t0), w = Math.max(sx(s.t1) - x, 3);
+      if (s.type === "fixation") {
+        el("rect", {x, y: A[0] + 3, width: w, height: 7, rx: 3, fill: COLOURS.fixation}, g);
+        el("text", {x: x + w / 2, y: A[0] + 26, "font-size": 14, "text-anchor": "middle", fill: COLOURS.fixation}, g)
+          .textContent = w > 60 ? `fixation ${s.t1 - s.t0} ms` : "";
+      } else {
+        for (const [top, bottom] of [A, B])
+          el("rect", {x, y: top, width: w, height: bottom - top, fill: COLOURS[s.type], opacity: 0.25}, g);
+        if (s.type === "blink")
+          el("text", {x: x + w / 2, y: A[1] - 10, "font-size": 14, "text-anchor": "middle", fill: "#4a5568"}, g)
+            .textContent = "blink: no data";
+      }
+      return g;
+    });
+
+    // traces, revealed from left to right
+    const id = "samples-clip-" + clipCount++;
+    const clip = el("rect", {x: L, y: 0, width: 0, height: 450}, el("clipPath", {id}, el("defs", {}, svg)));
+    const traces = el("g", {"clip-path": `url(#${id})`}, svg);
+    el("path", {d: path(d.x, ya), fill: "none", stroke: "#2b3e50", "stroke-width": 2}, traces);
+    el("path", {d: path(d.v, yb), fill: "none", stroke: "#2b3e50", "stroke-width": 1.5}, traces);
+    el("line", {x1: L, x2: R, y1: yb(d.threshold), y2: yb(d.threshold), stroke: COLOURS.saccade,
+                "stroke-dasharray": "6 4", "stroke-width": 1.5}, svg);
+    small(R - 4, yb(d.threshold) - 5, `threshold: ${d.threshold}°/s`, {"text-anchor": "end", fill: COLOURS.saccade});
+    const head = el("line", {x1: L, x2: L, y1: A[0], y2: B[1], stroke: "#dd6b20", "stroke-width": 2}, svg);
+
+    // the tracker's events, shown at the end for comparison
+    const eyelink = d.eyelink.map(s => el("rect", {x: sx(s.t0), y: E[0], width: Math.max(sx(s.t1) - sx(s.t0), 3),
+                                                   height: E[1] - E[0], rx: 3, fill: COLOURS[s.type], opacity: 0}, svg));
+    const info = el("text", {x: L, y: 438, "font-size": 18, fill: "#2b3e50"}, svg);
+    const say = text => () => (info.textContent = text);
+
+    controls(box, () => {
+      const SECONDS = 7, at = t => SECONDS * t / T;
+      gsap.set(found.concat(eyelink), {opacity: 0});
+      const tl = gsap.timeline({paused: true});
+      tl.add(say("The eye rests (flat line), then jumps: position changes fast, velocity has a peak."), 0);
+      tl.fromTo(clip, {attr: {width: 0}}, {attr: {width: R - L}, duration: SECONDS, ease: "none"}, 0);
+      tl.fromTo(head, {attr: {x1: L, x2: L}, opacity: 1}, {attr: {x1: R, x2: R}, duration: SECONDS, ease: "none"}, 0);
+      d.detected.forEach((s, i) => {
+        tl.to(found[i], {opacity: 1, duration: 0.25}, at(s.type === "fixation" ? s.t1 : s.t0));
+        if (s.type === "saccade" && i < 4)
+          tl.add(say(`Velocity above ${d.threshold}°/s → saccade (${s.t1 - s.t0} ms). ` +
+                     "What lies between two saccades is a fixation."), at(s.t0));
+        if (s.type === "blink")
+          tl.add(say("Eye closed: no samples. The fixations next to a blink are not trustworthy."), at(s.t0));
+      });
+      tl.to(head, {opacity: 0, duration: 0.3}, SECONDS);
+      tl.add(say("The EyeLink did the same while recording (velocity and acceleration thresholds): " +
+                 "we use its fixations."), SECONDS);
+      tl.to(eyelink, {opacity: 0.85, duration: 0.3, stagger: 0.08}, SECONDS + 0.2);
+      return tl;
+    });
+  }
+
+  // interest areas: REGION messages become boxes, then every fixation gets the word whose box it is in
+  function buildAoi(box) {
+    const d = JSON.parse(box.dataset.trial);
+    const x0 = Math.min(...d.regions.map(r => r.left)) - 20, x1 = Math.max(...d.regions.map(r => r.right)) + 20;
+    const top = Math.min(...d.regions.map(r => r.top)), bottom = Math.max(...d.regions.map(r => r.bottom));
+    const svg = el("svg", {viewBox: `${x0} ${top - 40} ${x1 - x0} ${bottom - top + 125}`});
+    box.prepend(svg);
+    const EMPTY = "#ebf4ff", HIT = "#fbd38d", rects = {};
+    const boxes = d.regions.map(r => {
+      const g = el("g", {}, svg);
+      rects[r.n] = el("rect", {x: r.left, y: r.top, width: r.right - r.left, height: r.bottom - r.top,
+                               fill: EMPTY, stroke: "#2b6cb0", "stroke-width": 1.5}, g);
+      el("text", {x: (r.left + r.right) / 2, y: r.top - 8, "font-size": 17, "text-anchor": "middle", fill: "#2b6cb0"}, g)
+        .textContent = r.n;
+      return g;
+    });
+    for (const r of d.regions)     // the sentence: 14.4 px per letter, half a space on each side of the word
+      el("text", {x: r.left + 7.2, y: (r.top + r.bottom) / 2 + 8, "font-family": "monospace", "font-size": 24,
+                  textLength: 14.4 * r.label.length, lengthAdjust: "spacingAndGlyphs"}, svg).textContent = r.label;
+    const trail = el("g", {}, svg);
+    const eye = el("circle", {cx: x0, cy: (top + bottom) / 2, r: 0, fill: "#2b6cb0", opacity: 0.6}, svg);
+    const info = el("text", {x: x0 + 20, y: bottom + 62, "font-size": 21, fill: "#2b3e50"}, svg);
+
+    const run = controls(box, (index = 0, intro = true) => {
+      const trial = d.trials[index];
+      trail.innerHTML = "";
+      gsap.set(Object.values(rects), {attr: {fill: EMPTY}});
+      gsap.set(eye, {attr: {r: 0}});
+      const tl = gsap.timeline({paused: true});
+      if (intro) {
+        tl.set(boxes, {opacity: 0});
+        d.regions.forEach((r, i) => {
+          tl.add(() => {
+            info.setAttribute("font-family", "monospace");
+            info.textContent = `MSG … REGION n=${r.n} label=${r.label} left=${r.left} top=${r.top} ` +
+                               `right=${r.right} bottom=${r.bottom}`;
+          });
+          tl.fromTo(boxes[i], {opacity: 0}, {opacity: 1, duration: 0.3});
+        });
+        tl.to({}, {duration: 0.5});
+      } else tl.set(boxes, {opacity: 1});
+      trial.fixations.forEach((f, i) => {
+        tl.to(eye, {attr: {cx: f.x, cy: f.y, r: 9}, duration: 0.12, ease: "power1.inOut"});
+        tl.add(() => {
+          info.setAttribute("font-family", "sans-serif");
+          info.textContent = `${trial.name}, fixation ${i + 1} at x = ${f.x}, y = ${f.y}: ` +
+            (f.n == null ? "outside every interest area → no word" : `inside box ${f.n} → word “${f.label}”`);
+          if (f.n != null) gsap.fromTo(rects[f.n], {attr: {fill: "#ed8936"}}, {attr: {fill: HIT}, duration: 0.5});
+          el("circle", {cx: f.x, cy: f.y, r: 3 + Math.sqrt(f.duration) / 2, opacity: 0.45,
+                        fill: f.n == null ? COLOURS.saccade : COLOURS.fixation}, trail);
+          el("text", {x: f.x, y: f.y + 30, "font-size": 15, "text-anchor": "middle", fill: "#4a5568"}, trail)
+            .textContent = i + 1;
+        });
+        tl.to(eye, {attr: {r: 5 + Math.sqrt(f.duration) / 1.5}, duration: f.duration / 400, ease: "none"});
+      });
+      tl.to(eye, {attr: {r: 0}, duration: 0.2});
+      tl.add(() => {
+        const inside = trial.fixations.filter(f => f.n != null).length;
+        info.textContent = `${trial.name}: ${inside} of ${trial.fixations.length} fixations are on a word; ` +
+                           "words without a fixation were skipped.";
+      });
+      return tl;
+    });
+    box.querySelectorAll("button.trial").forEach(b => (b.onclick = () => run(1, +b.dataset.trialIndex, false)));
+  }
+
   function onSlide(slide) {
     if (!slide || typeof gsap === "undefined") return;
     pipeline(slide);
     strip(slide);
-    slide.querySelectorAll(".scanpath-anim").forEach(b => b.play && b.play());
+    slide.querySelectorAll(".scanpath-anim, .samples-anim, .aoi-anim").forEach(b => b.play && b.play());
   }
 
   function init() {
     buildStrips();
     document.querySelectorAll(".scanpath-anim").forEach(buildScanpath);
+    document.querySelectorAll(".samples-anim").forEach(buildSamples);
+    document.querySelectorAll(".aoi-anim").forEach(buildAoi);
     Reveal.on("slidechanged", e => onSlide(e.currentSlide));
     onSlide(Reveal.getCurrentSlide());
   }

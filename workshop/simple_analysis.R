@@ -1,4 +1,4 @@
-# R part of the simplified workshop (simple.qmd): from the OpenSesame log files and the tables written by
+# R part of the workshop (workshop.qmd): from the OpenSesame log files and the tables written by
 # simple_preprocessing.py to cleaned data, plots and one mixed model per experiment.
 #
 #   cd workshop
@@ -49,7 +49,7 @@ reading <- reading_log |>
 reading |> select(subject_nr, item_list, item, condition, correct, trial_aborted) |> head(4)
 
 ## ---- r-reading-design
-reading |> count(item_list, condition)                          # each participant: 65 + 65
+reading |> count(item_list, condition)                          # 12 + 12 here (full study: 65 + 65)
 reading |> distinct(item, item_list, condition) |>              # each item: both versions
   count(item, name = "versions") |> count(versions)
 

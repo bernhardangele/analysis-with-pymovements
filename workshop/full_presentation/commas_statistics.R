@@ -1,5 +1,5 @@
 # Tables and statistics for the frases-comas experiment (workshop version), compared with the paper.
-# Input: measures.csv and questions.csv (written by commas_preprocessing.py). Run from workshop/:
+# Input: measures.csv and questions.csv (written by commas_preprocessing.py). Run from workshop/full_presentation/:
 #   Rscript commas_statistics.R
 # The "## ---- name" lines mark the parts that are shown in the slides.
 
@@ -7,7 +7,7 @@
 library(tidyverse)
 library(lme4)
 
-dir <- "data/frases-comas/derived/simple"
+dir <- "../data/frases-comas/derived/simple"
 measures  <- read_csv(file.path(dir, "measures.csv"), show_col_types = FALSE) |>
   mutate(comma = factor(cond, 1:2, c("comma present", "comma omitted")))
 questions <- read_csv(file.path(dir, "questions.csv"), show_col_types = FALSE)

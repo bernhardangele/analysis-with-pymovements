@@ -230,5 +230,9 @@ workshop/data/frases-comas/edf/*.exe
 workshop/data/frases-comas/edf/*.dll
 ~$*
 
-workshop/simple.html
+workshop/workshop.html
+workshop/workshop_files/
+workshop/full_presentation/full_presentation.html
+workshop/full_presentation/full_presentation_files/
+workshop/full_presentation/Rplots.pdf
 workshop/data/example_data/derived/

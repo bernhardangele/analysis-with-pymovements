@@ -5,5 +5,7 @@ workshop/data/frases-comas/edf/*.EDF
 workshop/data/frases-comas/edf/*.exe
 workshop/data/frases-comas/edf/*.dll
 workshop/data/frases-comas/derived
-workshop/presentation.html
-workshop/presentation_files
+workshop/workshop.html
+workshop/workshop_files
+workshop/full_presentation/full_presentation.html
+workshop/full_presentation/full_presentation_files

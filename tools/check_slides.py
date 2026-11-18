@@ -1,6 +1,6 @@
 """Check a rendered revealjs presentation: does the content of every slide fit, and how large are the figures?
 
-    python tools/check_slides.py workshop/presentation.html [--screenshots DIR]
+    python tools/check_slides.py workshop/workshop.html [--screenshots DIR]
 
 For each slide (with all fragments shown) it reports
   - elements that stick out of the slide (text cut off at the bottom or right),

@@ -8,7 +8,7 @@ USER root
 
 # Python packages go in their own venv. The base image already provides python3
 # and python3-venv, and the venv brings its own pip; libpython3-dev is needed so
-# reticulate can embed the venv's Python shared library when rendering presentation.qmd.
+# reticulate can embed the venv's Python shared library when rendering workshop.qmd.
 RUN apt-get update && apt-get install -y --no-install-recommends libpython3-dev \
     && rm -rf /var/lib/apt/lists/*
 ENV VIRTUAL_ENV=/opt/venv
